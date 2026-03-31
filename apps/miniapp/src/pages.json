@@ -1,0 +1,90 @@
+{
+  "pages": [
+    {
+      "path": "pages/diy/index",
+      "style": {
+        "navigationBarTitleText": "DIY"
+      }
+    },
+    {
+      "path": "pages/mall/index",
+      "style": {
+        "navigationBarTitleText": "商城"
+      }
+    },
+    {
+      "path": "pages/mine/index",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    },
+    {
+      "path": "pages/mine/address/index",
+      "style": {
+        "navigationBarTitleText": "收货地址"
+      }
+    },
+    {
+      "path": "pages/mine/address/add",
+      "style": {
+        "navigationBarTitleText": "新增收货地址",
+        "disableScroll": true
+      }
+    },
+    {
+      "path": "pages/mine/designs/index",
+      "style": {
+        "navigationBarTitleText": "我的设计"
+      }
+    },
+    {
+      "path": "pages/mine/cart/index",
+      "style": {
+        "navigationBarTitleText": "我的购物车"
+      }
+    },
+    {
+      "path": "pages/mine/orders/index",
+      "style": {
+        "navigationBarTitleText": "我的订单"
+      }
+    },
+    {
+      "path": "pages/mine/favorites/index",
+      "style": {
+        "navigationBarTitleText": "历史/收藏"
+      }
+    },
+    {
+      "path": "pages/mine/service/index",
+      "style": {
+        "navigationBarTitleText": "联系客服"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f7f7f7"
+  },
+  "tabBar": {
+    "color": "#666666",
+    "selectedColor": "#3c9cff",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/diy/index",
+        "text": "DIY"
+      },
+      {
+        "pagePath": "pages/mall/index",
+        "text": "商城"
+      },
+      {
+        "pagePath": "pages/mine/index",
+        "text": "我的"
+      }
+    ]
+  }
+}

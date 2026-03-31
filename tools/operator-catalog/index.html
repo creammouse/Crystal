@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Crystal 商品资料小工具</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="page-header">
+    <h1>Crystal 商品资料小工具</h1>
+    <div class="toolbar">
+      <button type="button" class="btn btn-primary" id="btn-export">导出 JSON 备份</button>
+      <button type="button" class="btn btn-wechat" id="btn-share-wechat">分享到微信…</button>
+      <button type="button" class="btn btn-ghost" id="btn-import">从文件导入</button>
+      <input type="file" id="import-file" accept=".json,application/json" hidden />
+      <button type="button" class="btn btn-danger" id="btn-clear-storage">清空浏览器数据</button>
+      <span class="hint">已自动保存到本浏览器，关掉再打开本页一般不用重新导入；换电脑、换浏览器或清除缓存前请先导出 JSON。</span>
+    </div>
+    <p class="toolbar-subnote">「分享到微信」：手机 Safari / Chrome 常会弹出系统分享，再点选微信即可；若列表里没有微信或分享失败（图很多时容易发生），请用「导出 JSON 备份」，在微信里选「文件」发送。</p>
+  </header>
+
+  <div class="workspace">
+    <div class="workspace-main">
+  <nav class="tabs" aria-label="分区切换">
+    <button type="button" class="tab" data-tab="diy">DIY 分区</button>
+    <button type="button" class="tab" data-tab="mall">商品分区</button>
+  </nav>
+
+  <main>
+    <!-- DIY -->
+    <section id="panel-diy" class="panel" aria-label="DIY 配料">
+      <div class="block">
+        <h2 class="block-title">大类</h2>
+        <p class="help">输入名称后点「添加大类」即可；可以不填名称，所有格子都允许留空。</p>
+        <div class="row">
+          <input type="text" id="diy-major-name" placeholder="大类名称（可空）" />
+          <button type="button" class="btn btn-primary" id="diy-add-major">添加大类</button>
+        </div>
+        <ul class="list" id="diy-major-list"></ul>
+      </div>
+
+      <div class="block">
+        <h2 class="block-title">子类</h2>
+        <p class="help">先选好大类（也可不选），再填子类名称并添加。</p>
+        <div class="row">
+          <select id="diy-sub-major" aria-label="子类所属大类"></select>
+        </div>
+        <div class="row">
+          <input type="text" id="diy-sub-name" placeholder="子类名称（可空）" />
+          <button type="button" class="btn btn-primary" id="diy-add-sub">添加子类</button>
+        </div>
+        <ul class="list" id="diy-sub-list"></ul>
+      </div>
+
+      <div class="block">
+        <h2 class="block-title">配料项（珠子 / 配饰 / 花托等）</h2>
+        <p class="help">下面列表是已添加的项；点「编辑」会载入到表单，改完点「保存修改」。勾选「这是珠子」后会出现尺寸栏。</p>
+        <div id="diy-item-cards"></div>
+
+        <h3 id="diy-edit-anchor" class="block-title" style="margin-top: 24px; font-size: 1rem;">添加或编辑一项</h3>
+        <form id="diy-item-form" class="form-grid">
+          <div>
+            <label class="lbl" for="diy-item-major">所属大类</label>
+            <select id="diy-item-major"></select>
+          </div>
+          <div>
+            <label class="lbl" for="diy-item-sub">所属子类</label>
+            <select id="diy-item-sub"></select>
+          </div>
+          <div>
+            <label class="lbl" for="diy-image-input">图片（可多选）</label>
+            <input type="file" id="diy-image-input" accept="image/*" multiple />
+            <div class="thumbs" id="diy-image-thumbs"></div>
+          </div>
+          <div>
+            <label class="lbl" for="diy-item-name">名称</label>
+            <input type="text" id="diy-item-name" placeholder="可空" />
+          </div>
+          <div>
+            <label class="lbl" for="diy-item-material">材质</label>
+            <input type="text" id="diy-item-material" placeholder="可空" />
+          </div>
+          <div class="full">
+            <label class="lbl" for="diy-item-intro">介绍</label>
+            <textarea id="diy-item-intro" placeholder="可空"></textarea>
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="diy-item-bead" />
+            <label for="diy-item-bead">这是珠子（勾选后可填尺寸）</label>
+          </div>
+          <div id="diy-sizes-wrap" class="full hidden">
+            <label class="lbl" for="diy-item-sizes">尺寸（例如多个：8、10、12 或随意写）</label>
+            <input type="text" id="diy-item-sizes" placeholder="可空，如：8, 10, 12" />
+          </div>
+          <div>
+            <label class="lbl" for="diy-item-price">售价</label>
+            <input type="text" id="diy-item-price" placeholder="可空，如：128 或 128.00" />
+          </div>
+          <div class="full">
+            <label class="lbl" for="diy-item-remark">备注</label>
+            <textarea id="diy-item-remark" placeholder="可空"></textarea>
+          </div>
+          <div class="row">
+            <button type="submit" class="btn btn-primary" id="diy-form-submit">添加配料项</button>
+            <button type="button" class="btn btn-ghost" id="diy-form-cancel">清空表单</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- 商城商品 -->
+    <section id="panel-mall" class="panel" aria-label="商城商品">
+      <div class="block">
+        <h2 class="block-title">商品分类</h2>
+        <p class="help">给商城用的分类名称，添加后可在下面商品里选用。</p>
+        <div class="row">
+          <input type="text" id="mall-cat-name" placeholder="分类名称（可空）" />
+          <button type="button" class="btn btn-primary" id="mall-add-cat">添加分类</button>
+        </div>
+        <ul class="list" id="mall-cat-list"></ul>
+      </div>
+
+      <div class="block">
+        <h2 class="block-title">商品</h2>
+        <p class="help">已添加的商品在下列卡片中；编辑方式与 DIY 相同。</p>
+        <div id="mall-product-cards"></div>
+
+        <h3 id="mall-edit-anchor" class="block-title" style="margin-top: 24px; font-size: 1rem;">添加或编辑商品</h3>
+        <form id="mall-product-form" class="form-grid">
+          <div>
+            <label class="lbl" for="mall-product-category">所属分类</label>
+            <select id="mall-product-category"></select>
+          </div>
+          <div>
+            <label class="lbl" for="mall-image-input">图片（可多选）</label>
+            <input type="file" id="mall-image-input" accept="image/*" multiple />
+            <div class="thumbs" id="mall-image-thumbs"></div>
+          </div>
+          <div>
+            <label class="lbl" for="mall-product-name">名称</label>
+            <input type="text" id="mall-product-name" placeholder="可空" />
+          </div>
+          <div class="full">
+            <label class="lbl" for="mall-product-intro">介绍</label>
+            <textarea id="mall-product-intro" placeholder="可空"></textarea>
+          </div>
+          <div>
+            <label class="lbl" for="mall-product-material">材质</label>
+            <input type="text" id="mall-product-material" placeholder="可空" />
+          </div>
+          <div>
+            <label class="lbl" for="mall-product-price">价格</label>
+            <input type="text" id="mall-product-price" placeholder="可空" />
+          </div>
+          <div class="full">
+            <label class="lbl" for="mall-product-remark">备注</label>
+            <textarea id="mall-product-remark" placeholder="可空"></textarea>
+          </div>
+          <div class="row">
+            <button type="submit" class="btn btn-primary" id="mall-form-submit">添加商品</button>
+            <button type="button" class="btn btn-ghost" id="mall-form-cancel">清空表单</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+    </div>
+
+    <aside class="workspace-aside" aria-label="已添加内容一览">
+      <div class="aside-inner">
+        <h2 class="aside-title">已添加内容一览</h2>
+        <p class="aside-help">本栏是总目录：能看清大类→子类→配料、分类→商品。点击<strong>配料名或商品名</strong>会在左侧打开编辑表单。删除大类、子类、分类仍在左侧操作。</p>
+
+        <h3 class="aside-section">DIY 分区</h3>
+        <div id="sidebar-diy-tree" class="sidebar-tree"></div>
+
+        <h3 class="aside-section">商品分区</h3>
+        <div id="sidebar-mall-tree" class="sidebar-tree"></div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

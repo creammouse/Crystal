@@ -1,0 +1,16 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// 微信用户（openid 唯一）；后续可扩展昵称、头像等
+model User {
+  id        String   @id @default(cuid())
+  openid    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

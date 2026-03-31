@@ -1,0 +1,22 @@
+{
+  "name": "Crystal",
+  "appid": "wx8f79b1da12bc0a7b",
+  "description": "Crystal miniapp",
+  "versionName": "0.1.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "mp-weixin": {
+    "appid": "wx8f79b1da12bc0a7b",
+    "setting": {
+      "urlCheck": false
+    },
+    "requiredPrivateInfos": [
+      "chooseLocation"
+    ],
+    "permission": {
+      "scope.userLocation": {
+        "desc": "用于在地图上选择收货地址，便于填写配送位置"
+      }
+    }
+  }
+}
