@@ -6,10 +6,6 @@ export function getApiBaseUrl(): string {
   return 'http://127.0.0.1:3000'
 }
 
-export function isApiDebug(): boolean {
-  return import.meta.env.VITE_API_DEBUG === 'true'
-}
-
 /** 展示头像：支持 https 外链或本地上传后的 `/uploads/...` 相对路径 */
 export function resolveMediaUrl(pathOrUrl: string | undefined | null): string {
   if (!pathOrUrl)

@@ -23,7 +23,7 @@ export async function ensureLoggedInForFeature(): Promise<boolean> {
   return await new Promise<boolean>((resolve) => {
     uni.showModal({
       title: '需要登录',
-      content: '使用该功能需要先完成微信登录',
+      content: '使用该功能需要先完成登录',
       confirmText: '去登录',
       cancelText: '取消',
       success: (res) => {

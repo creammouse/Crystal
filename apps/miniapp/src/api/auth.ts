@@ -9,13 +9,15 @@ export type LoginResponse = {
 
 export type MeResponse = {
   id: string
+  phone?: string | null
   nickname: string | null
   avatarUrl: string | null
 }
 
-export async function loginWithWechatCode(code: string) {
+/** 小程序 getPhoneNumber 返回的 code，用于服务端换取手机号并登录 */
+export async function loginWithPhoneWechatCode(code: string) {
   return request<LoginResponse>({
-    path: '/auth/wechat',
+    path: '/auth/phone/wechat',
     method: 'POST',
     data: { code },
     auth: false,

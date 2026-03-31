@@ -44,11 +44,18 @@
           v-for="(item, index) in menuEntries"
           :key="item.key"
           class="menu-item"
-          :class="{ 'menu-item--last': index === menuEntries.length - 1 }"
+          :class="{ 'menu-item--last': index === menuEntries.length - 1 && !isLoggedIn }"
           @tap="onMenuTap(item.key)"
         >
           <text class="menu-label">{{ item.label }}</text>
           <text class="menu-arrow">›</text>
+        </view>
+        <view
+          v-if="isLoggedIn"
+          class="menu-item menu-item--last menu-item--logout"
+          @tap="onLogout"
+        >
+          <text class="menu-label menu-label--logout">退出登录</text>
         </view>
       </view>
     </view>
@@ -115,6 +122,19 @@ async function onMenuTap(key: (typeof menuEntries)[number]['key']) {
   const url = menuRoutes[key]
   if (url)
     uni.navigateTo({ url })
+}
+
+function onLogout() {
+  uni.showModal({
+    title: '退出登录',
+    content: '确定要退出当前账号吗？',
+    confirmText: '退出',
+    cancelText: '取消',
+    success: (res) => {
+      if (res.confirm)
+        userStore.logout()
+    },
+  })
 }
 </script>
 
@@ -265,5 +285,14 @@ async function onMenuTap(key: (typeof menuEntries)[number]['key']) {
   font-size: 36rpx;
   color: #cccccc;
   line-height: 1;
+}
+
+.menu-item--logout {
+  justify-content: flex-start;
+}
+
+.menu-label--logout {
+  color: #e54d42;
+  font-weight: 500;
 }
 </style>

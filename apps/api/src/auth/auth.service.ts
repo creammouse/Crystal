@@ -8,61 +8,104 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 
-type WechatCode2Session = {
-  openid?: string;
-  session_key?: string;
-  unionid?: string;
+type WxAccessTokenRes = {
+  access_token?: string;
+  expires_in?: number;
   errcode?: number;
   errmsg?: string;
+};
+
+type WxPhoneNumberRes = {
+  errcode?: number;
+  errmsg?: string;
+  phone_info?: { phoneNumber?: string };
 };
 
 const ACCESS_EXPIRES_SEC = 7 * 24 * 60 * 60;
 
 @Injectable()
 export class AuthService {
+  private accessTokenCache: { token: string; expiresAtMs: number } | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
   ) {}
 
-  async loginWithWechatCode(code: string) {
+  private async getMiniProgramAccessToken(): Promise<string> {
     const appid = this.config.get<string>('WECHAT_MINI_APPID');
     const secret = this.config.get<string>('WECHAT_MINI_SECRET');
     if (!appid || !secret) {
       throw new ServiceUnavailableException(
-        '未配置 WECHAT_MINI_APPID / WECHAT_MINI_SECRET，无法换取 openid',
+        '未配置 WECHAT_MINI_APPID / WECHAT_MINI_SECRET',
       );
     }
-
-    const url = new URL('https://api.weixin.qq.com/sns/jscode2session');
+    const now = Date.now();
+    if (
+      this.accessTokenCache &&
+      this.accessTokenCache.expiresAtMs > now + 60_000
+    ) {
+      return this.accessTokenCache.token;
+    }
+    const url = new URL('https://api.weixin.qq.com/cgi-bin/token');
+    url.searchParams.set('grant_type', 'client_credential');
     url.searchParams.set('appid', appid);
     url.searchParams.set('secret', secret);
-    url.searchParams.set('js_code', code);
-    url.searchParams.set('grant_type', 'authorization_code');
-
     const res = await fetch(url.toString());
-    const data = (await res.json()) as WechatCode2Session;
-
+    const data = (await res.json()) as WxAccessTokenRes;
     if (data.errcode) {
       throw new BadRequestException(
-        `微信接口错误: ${data.errmsg ?? data.errcode}`,
+        `获取 access_token 失败: ${data.errmsg ?? data.errcode}`,
       );
     }
-    if (!data.openid) {
-      throw new BadRequestException('微信未返回 openid');
+    if (!data.access_token) {
+      throw new BadRequestException('微信未返回 access_token');
     }
+    const ttlMs = (data.expires_in ?? 7200) * 1000;
+    this.accessTokenCache = {
+      token: data.access_token,
+      expiresAtMs: now + ttlMs,
+    };
+    return data.access_token;
+  }
+
+  /**
+   * 小程序「手机号快捷登录」：getPhoneNumber 返回的 code 换手机号，再签发 JWT。
+   */
+  async loginWithPhoneWechatCode(phoneCode: string) {
+    const accessToken = await this.getMiniProgramAccessToken();
+    const url = new URL(
+      'https://api.weixin.qq.com/wxa/business/getuserphonenumber',
+    );
+    url.searchParams.set('access_token', accessToken);
+    const res = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: phoneCode }),
+    });
+    const data = (await res.json()) as WxPhoneNumberRes;
+    if (data.errcode && data.errcode !== 0) {
+      throw new BadRequestException(
+        `获取手机号失败: ${data.errmsg ?? data.errcode}`,
+      );
+    }
+    const rawPhone = data.phone_info?.phoneNumber?.trim();
+    if (!rawPhone) {
+      throw new BadRequestException('微信未返回手机号');
+    }
+    const phone = rawPhone.replace(/\s/g, '');
 
     const user = await this.prisma.user.upsert({
-      where: { openid: data.openid },
-      create: { openid: data.openid },
+      where: { phone },
+      create: { phone },
       update: {},
     });
 
-    const accessToken = await this.jwt.signAsync({ sub: user.id });
+    const accessTokenJwt = await this.jwt.signAsync({ sub: user.id });
 
     return {
-      accessToken,
+      accessToken: accessTokenJwt,
       tokenType: 'Bearer' as const,
       expiresIn: ACCESS_EXPIRES_SEC,
       user: { id: user.id },
@@ -76,6 +119,7 @@ export class AuthService {
     }
     return {
       id: user.id,
+      phone: user.phone,
       nickname: user.nickname,
       avatarUrl: user.avatarUrl,
     };
@@ -97,6 +141,7 @@ export class AuthService {
     });
     return {
       id: user.id,
+      phone: user.phone,
       nickname: user.nickname,
       avatarUrl: user.avatarUrl,
     };

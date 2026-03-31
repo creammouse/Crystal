@@ -1,21 +1,26 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { fetchMe, loginWithWechatCode, updateProfile } from '../api/auth'
-import { getApiBaseUrl, isApiDebug } from '../config'
+import { fetchMe, loginWithPhoneWechatCode } from '../api/auth'
 import { getStoredToken, setStoredToken } from '../utils/request'
 
-function logLogin(phase: string, extra?: unknown) {
-  const line = extra === undefined ? phase : `${phase} ${JSON.stringify(extra)}`
-  console.warn(`[Crystal Login] ${line}`)
+function maskPhone(phone: string): string {
+  const d = phone.replace(/\D/g, '')
+  if (d.length >= 11)
+    return `${d.slice(0, 3)}****${d.slice(-4)}`
+  if (d.length >= 7)
+    return phone
+  return phone
 }
 
 export const useUserStore = defineStore('user', () => {
   const userId = ref('')
-  /** 展示用昵称：微信资料授权或登录后的默认文案 */
+  /** 展示用昵称：资料昵称或脱敏手机号 */
   const nickname = ref('未登录')
-  /** 展示用头像（来自 getUserProfile，仅本次会话有效；持久化需后端） */
   const avatarUrl = ref('')
   const loading = ref(false)
+  const loginSheetVisible = ref(false)
+
+  let pendingEnsureLoginResolve: (() => void) | null = null
 
   const isLoggedIn = computed(() => Boolean(userId.value))
 
@@ -62,8 +67,19 @@ export const useUserStore = defineStore('user', () => {
     setStoredToken('')
   }
 
+  function logout() {
+    clearSession()
+    uni.showToast({ title: '已退出登录', icon: 'none' })
+  }
+
+  function endLoginFlow() {
+    loginSheetVisible.value = false
+    pendingEnsureLoginResolve?.()
+    pendingEnsureLoginResolve = null
+  }
+
   /**
-   * 仅在有本地 token 时请求 /auth/me，用于冷启动恢复登录态；不会调 uni.login。
+   * 仅在有本地 token 时请求 /auth/me，用于冷启动恢复登录态。
    */
   async function tryRestoreSession() {
     if (!getStoredToken()) {
@@ -73,89 +89,59 @@ export const useUserStore = defineStore('user', () => {
     try {
       await loadProfile()
     }
-    catch (e) {
-      logLogin('tryRestoreSession failed', normalizeLoginError(e))
-    }
+    catch {}
   }
 
   /**
-   * 用户主动登录：先弹出微信「获取你的昵称、头像」说明（getUserProfile），再 uni.login 换 code。
-   * 用户拒绝头像昵称授权时，仍可用 code 完成基础登录（openid）。
+   * 需要登录时弹出登录弹层；用户完成或取消后结束。
    */
   async function ensureLogin() {
-    loading.value = true
-    let profileNick = ''
-    let profileAvatar = ''
-    try {
-      logLogin('start', { baseUrl: getApiBaseUrl() })
-      try {
-        logLogin('getUserProfile …')
-        const prof = await new Promise<UniApp.GetUserProfileRes>((resolve, reject) => {
-          uni.getUserProfile({
-            desc: '用于完善个人资料与会员展示',
-            success: resolve,
-            fail: reject,
-          })
-        })
-        const u = prof.userInfo
-        if (u) {
-          profileNick = u.nickName || ''
-          profileAvatar = u.avatarUrl || ''
-        }
-        logLogin('getUserProfile ok')
-      }
-      catch (e) {
-        logLogin('getUserProfile skipped', e)
-        uni.showToast({
-          title: '未授权头像昵称，将使用基础登录',
-          icon: 'none',
-          duration: 2000,
-        })
-      }
+    if (isLoggedIn.value)
+      return
+    return new Promise<void>((resolve) => {
+      pendingEnsureLoginResolve = resolve
+      loginSheetVisible.value = true
+    })
+  }
 
-      logLogin('uni.login …')
-      const loginRes = await new Promise<UniApp.LoginRes>((resolve, reject) => {
-        uni.login({
-          provider: 'weixin',
-          success: resolve,
-          fail: reject,
-        })
+  /**
+   * 微信「手机号快捷登录」：getPhoneNumber 回调中的 detail。
+   */
+  async function handlePhoneLoginDetail(detail: {
+    errMsg?: string
+    code?: string
+  }) {
+    const errMsg = detail.errMsg ?? ''
+    if (errMsg !== 'getPhoneNumber:ok') {
+      uni.showToast({
+        title: errMsg.includes('deny') ? '已取消授权' : '未授权手机号',
+        icon: 'none',
       })
-      if (!loginRes.code) {
-        uni.showToast({ title: '未获取到登录凭证', icon: 'none' })
-        return
-      }
-      logLogin('uni.login ok', { codeLen: loginRes.code.length })
-      logLogin('POST /auth/wechat …')
-      const data = await loginWithWechatCode(loginRes.code)
-      logLogin('POST /auth/wechat ok')
+      endLoginFlow()
+      return
+    }
+    const code = detail.code
+    if (!code) {
+      uni.showToast({ title: '请升级微信版本后重试', icon: 'none' })
+      endLoginFlow()
+      return
+    }
+    loading.value = true
+    try {
+      const data = await loginWithPhoneWechatCode(code)
       setStoredToken(data.accessToken)
       userId.value = data.user.id
-      nickname.value = profileNick || '微信用户'
-      avatarUrl.value = profileAvatar
-      if (profileNick || profileAvatar) {
-        logLogin('PATCH /auth/profile …')
-        await updateProfile({
-          nickname: profileNick || undefined,
-          avatarUrl: profileAvatar || undefined,
-        })
-      }
-      logLogin('GET /auth/me …')
       await loadProfile()
-      logLogin('done')
+      uni.showToast({ title: '登录成功', icon: 'success' })
     }
     catch (e) {
-      console.error('[Crystal Login] error', e)
+      console.error(e)
       clearSession()
-      const msg = normalizeLoginError(e)
-      showLoginErrorDetail(
-        isApiDebug()
-          ? `${msg}\n\n提示：已开启 VITE_API_DEBUG，请同时看控制台 [Crystal Login] / [Crystal API]`
-          : `${msg}\n\n若显示 timeout / fail，请检查：微信公众平台 request 合法域名是否已添加 https://api.northstarway.top（勿带路径）；是否已重新上传体验版/正式版。`,
-      )
+      showLoginErrorDetail(normalizeLoginError(e))
     }
     finally {
       loading.value = false
+      endLoginFlow()
     }
   }
 
@@ -167,7 +153,7 @@ export const useUserStore = defineStore('user', () => {
     try {
       const me = await fetchMe()
       userId.value = me.id
-      nickname.value = me.nickname?.trim() || '微信用户'
+      nickname.value = me.nickname?.trim() || maskPhone(me.phone ?? '') || '手机用户'
       avatarUrl.value = me.avatarUrl?.trim() || ''
     }
     catch (e) {
@@ -182,9 +168,13 @@ export const useUserStore = defineStore('user', () => {
     avatarUrl,
     loading,
     isLoggedIn,
+    loginSheetVisible,
     tryRestoreSession,
     ensureLogin,
+    handlePhoneLoginDetail,
+    endLoginFlow,
     loadProfile,
     clearSession,
+    logout,
   }
 })

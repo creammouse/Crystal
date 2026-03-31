@@ -17,8 +17,8 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { randomBytes } from 'crypto';
 import { AuthService } from './auth.service';
+import { PhoneWechatDto } from './dto/phone-wechat.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { WechatLoginDto } from './dto/wechat-login.dto';
 
 type AuthedRequest = Request & { user: { userId: string } };
 
@@ -26,9 +26,10 @@ type AuthedRequest = Request & { user: { userId: string } };
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  @Post('wechat')
-  wechat(@Body() dto: WechatLoginDto) {
-    return this.auth.loginWithWechatCode(dto.code);
+  /** 小程序 getPhoneNumber 返回的 code */
+  @Post('phone/wechat')
+  phoneWechat(@Body() dto: PhoneWechatDto) {
+    return this.auth.loginWithPhoneWechatCode(dto.code);
   }
 
   @Get('me')

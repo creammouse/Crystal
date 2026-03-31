@@ -1,18 +1,9 @@
-import { getApiBaseUrl, isApiDebug } from '../config'
+import { getApiBaseUrl } from '../config'
 
 const TOKEN_KEY = 'crystal_access_token'
 
 /** 与微信客户端默认接近；过短易误判为「一直转圈」 */
 const REQUEST_TIMEOUT_MS = 60_000
-
-function logApi(...parts: unknown[]) {
-  if (isApiDebug())
-    console.warn('[Crystal API]', ...parts)
-}
-
-function logApiFail(...parts: unknown[]) {
-  console.warn('[Crystal API]', ...parts)
-}
 
 function pickFailMessage(err: unknown): string {
   if (err && typeof err === 'object') {
@@ -84,8 +75,6 @@ export async function request<T>(options: {
 
   const url = joinUrl(path)
   const started = Date.now()
-  const reqId = Math.random().toString(36).slice(2, 8)
-  logApi(`→ [${reqId}]`, method, url)
 
   return new Promise((resolve, reject) => {
     uni.request({
@@ -97,7 +86,6 @@ export async function request<T>(options: {
       success: (res) => {
         const ms = Date.now() - started
         const status = res.statusCode ?? 0
-        logApi(`← [${reqId}]`, status, `${ms}ms`)
         if (status >= 200 && status < 300) {
           resolve(res.data as T)
           return
@@ -105,19 +93,12 @@ export async function request<T>(options: {
         const body = res.data as ApiErrorBody
         const raw = body?.message
         const msg = Array.isArray(raw) ? raw.join(',') : (raw || `HTTP ${status}`)
-        const detail = isApiDebug()
-          ? `${msg} | ${method} ${url} | ${ms}ms`
-          : msg
-        reject(new Error(detail))
+        reject(new Error(msg))
       },
       fail: (err) => {
         const ms = Date.now() - started
         const raw = pickFailMessage(err)
-        logApiFail(`✗ [${reqId}]`, raw, `${ms}ms`, err)
-        const hint = isApiDebug()
-          ? `${raw} | ${method} ${url} | ${ms}ms`
-          : `${raw}（${ms}ms）`
-        reject(new Error(`网络请求失败：${hint}`))
+        reject(new Error(`网络请求失败：${raw}（${ms}ms）`))
       },
     })
   })
