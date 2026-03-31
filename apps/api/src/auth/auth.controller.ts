@@ -1,7 +1,23 @@
-import { Controller, Get, Post, Body, Req, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Post,
+  Req,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
+import { randomBytes } from 'crypto';
 import { AuthService } from './auth.service';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { WechatLoginDto } from './dto/wechat-login.dto';
 
 type AuthedRequest = Request & { user: { userId: string } };
@@ -19,5 +35,37 @@ export class AuthController {
   @UseGuards(AuthGuard('jwt'))
   me(@Req() req: AuthedRequest) {
     return this.auth.getProfile(req.user.userId);
+  }
+
+  @Patch('profile')
+  @UseGuards(AuthGuard('jwt'))
+  patchProfile(@Req() req: AuthedRequest, @Body() dto: UpdateProfileDto) {
+    return this.auth.updateProfile(req.user.userId, dto);
+  }
+
+  @Post('upload-avatar')
+  @UseGuards(AuthGuard('jwt'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: join(process.cwd(), 'uploads', 'avatars'),
+        filename: (_req, file, cb) => {
+          const ext = extname(file.originalname) || '.jpg';
+          cb(null, `${randomBytes(16).toString('hex')}${ext}`);
+        },
+      }),
+      limits: { fileSize: 2 * 1024 * 1024 },
+    }),
+  )
+  async uploadAvatar(
+    @Req() req: AuthedRequest,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('未收到图片文件');
+    }
+    const relative = `/uploads/avatars/${file.filename}`;
+    await this.auth.setAvatarUrl(req.user.userId, relative);
+    return { avatarUrl: relative };
   }
 }

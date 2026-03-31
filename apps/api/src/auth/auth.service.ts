@@ -74,6 +74,39 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException();
     }
-    return { id: user.id };
+    return {
+      id: user.id,
+      nickname: user.nickname,
+      avatarUrl: user.avatarUrl,
+    };
+  }
+
+  async updateProfile(
+    userId: string,
+    dto: { nickname?: string; avatarUrl?: string },
+  ) {
+    const data: { nickname?: string | null; avatarUrl?: string | null } = {};
+    if (dto.nickname !== undefined) data.nickname = dto.nickname;
+    if (dto.avatarUrl !== undefined) data.avatarUrl = dto.avatarUrl;
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('至少需要提供 nickname 或 avatarUrl');
+    }
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+    return {
+      id: user.id,
+      nickname: user.nickname,
+      avatarUrl: user.avatarUrl,
+    };
+  }
+
+  async setAvatarUrl(userId: string, relativePath: string) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl: relativePath },
+    });
+    return user;
   }
 }

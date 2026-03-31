@@ -5,9 +5,9 @@
         <view class="profile-row">
           <view class="avatar-wrap" @tap="onTapAvatar">
             <image
-              v-if="avatarUrl"
+              v-if="avatarDisplay"
               class="avatar"
-              :src="avatarUrl"
+              :src="avatarDisplay"
               mode="aspectFill"
             />
             <view v-else class="avatar avatar--placeholder">
@@ -56,13 +56,16 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { onShow } from '@dcloudio/uni-app'
+import { resolveMediaUrl } from '../../config'
 import { ensureLoggedInForFeature, menuNeedsAuth } from '../../utils/require-auth'
 import { useUserStore } from '../../stores/user'
 
 const userStore = useUserStore()
 const { nickname, loading, isLoggedIn, avatarUrl } = storeToRefs(userStore)
+const avatarDisplay = computed(() => resolveMediaUrl(avatarUrl.value))
 
 
 const menuEntries = [
@@ -80,7 +83,7 @@ onShow(() => {
 
 function onTapAvatar() {
   if (isLoggedIn.value) {
-    uni.showToast({ title: '资料编辑敬请期待', icon: 'none' })
+    uni.navigateTo({ url: '/pages/mine/profile/index' })
     return
   }
   void userStore.ensureLogin()
@@ -91,8 +94,7 @@ function onTapLoginPrompt() {
 }
 
 function onEditProfile() {
-  // TODO: 跳转资料编辑页
-  uni.showToast({ title: '敬请期待', icon: 'none' })
+  uni.navigateTo({ url: '/pages/mine/profile/index' })
 }
 
 const menuRoutes: Partial<Record<(typeof menuEntries)[number]['key'], string>> = {

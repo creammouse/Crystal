@@ -1,7 +1,13 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { fetchMe, loginWithWechatCode } from '../api/auth'
+import { fetchMe, loginWithWechatCode, updateProfile } from '../api/auth'
+import { getApiBaseUrl, isApiDebug } from '../config'
 import { getStoredToken, setStoredToken } from '../utils/request'
+
+function logLogin(phase: string, extra?: unknown) {
+  const line = extra === undefined ? phase : `${phase} ${JSON.stringify(extra)}`
+  console.warn(`[Crystal Login] ${line}`)
+}
 
 export const useUserStore = defineStore('user', () => {
   const userId = ref('')
@@ -64,7 +70,12 @@ export const useUserStore = defineStore('user', () => {
       clearSession()
       return
     }
-    await loadProfile()
+    try {
+      await loadProfile()
+    }
+    catch (e) {
+      logLogin('tryRestoreSession failed', normalizeLoginError(e))
+    }
   }
 
   /**
@@ -76,7 +87,9 @@ export const useUserStore = defineStore('user', () => {
     let profileNick = ''
     let profileAvatar = ''
     try {
+      logLogin('start', { baseUrl: getApiBaseUrl() })
       try {
+        logLogin('getUserProfile …')
         const prof = await new Promise<UniApp.GetUserProfileRes>((resolve, reject) => {
           uni.getUserProfile({
             desc: '用于完善个人资料与会员展示',
@@ -89,8 +102,10 @@ export const useUserStore = defineStore('user', () => {
           profileNick = u.nickName || ''
           profileAvatar = u.avatarUrl || ''
         }
+        logLogin('getUserProfile ok')
       }
-      catch {
+      catch (e) {
+        logLogin('getUserProfile skipped', e)
         uni.showToast({
           title: '未授权头像昵称，将使用基础登录',
           icon: 'none',
@@ -98,6 +113,7 @@ export const useUserStore = defineStore('user', () => {
         })
       }
 
+      logLogin('uni.login …')
       const loginRes = await new Promise<UniApp.LoginRes>((resolve, reject) => {
         uni.login({
           provider: 'weixin',
@@ -109,18 +125,34 @@ export const useUserStore = defineStore('user', () => {
         uni.showToast({ title: '未获取到登录凭证', icon: 'none' })
         return
       }
+      logLogin('uni.login ok', { codeLen: loginRes.code.length })
+      logLogin('POST /auth/wechat …')
       const data = await loginWithWechatCode(loginRes.code)
+      logLogin('POST /auth/wechat ok')
       setStoredToken(data.accessToken)
       userId.value = data.user.id
       nickname.value = profileNick || '微信用户'
       avatarUrl.value = profileAvatar
+      if (profileNick || profileAvatar) {
+        logLogin('PATCH /auth/profile …')
+        await updateProfile({
+          nickname: profileNick || undefined,
+          avatarUrl: profileAvatar || undefined,
+        })
+      }
+      logLogin('GET /auth/me …')
       await loadProfile()
+      logLogin('done')
     }
     catch (e) {
-      console.error(e)
+      console.error('[Crystal Login] error', e)
       clearSession()
       const msg = normalizeLoginError(e)
-      showLoginErrorDetail(msg)
+      showLoginErrorDetail(
+        isApiDebug()
+          ? `${msg}\n\n提示：已开启 VITE_API_DEBUG，请同时看控制台 [Crystal Login] / [Crystal API]`
+          : `${msg}\n\n若显示 timeout / fail，请检查：微信公众平台 request 合法域名是否已添加 https://api.northstarway.top（勿带路径）；是否已重新上传体验版/正式版。`,
+      )
     }
     finally {
       loading.value = false
@@ -135,11 +167,12 @@ export const useUserStore = defineStore('user', () => {
     try {
       const me = await fetchMe()
       userId.value = me.id
-      if (!nickname.value || nickname.value === '未登录')
-        nickname.value = '微信用户'
+      nickname.value = me.nickname?.trim() || '微信用户'
+      avatarUrl.value = me.avatarUrl?.trim() || ''
     }
-    catch {
+    catch (e) {
       clearSession()
+      throw e
     }
   }
 
