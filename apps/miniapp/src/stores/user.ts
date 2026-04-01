@@ -1,21 +1,20 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { fetchMe, loginWithPhoneCode, loginWithPhoneWechatCode, sendPhoneLoginCode } from '../api/auth'
+import {
+  bindPhoneWithWechatCode,
+  fetchMe,
+  loginWithPhoneWechatCode,
+} from '../api/auth'
+import { maskPhone } from '../utils/mask-phone'
 import { getStoredToken, setStoredToken } from '../utils/request'
-
-function maskPhone(phone: string): string {
-  const d = phone.replace(/\D/g, '')
-  if (d.length >= 11)
-    return `${d.slice(0, 3)}****${d.slice(-4)}`
-  if (d.length >= 7)
-    return phone
-  return phone
-}
 
 export const useUserStore = defineStore('user', () => {
   const userId = ref('')
   /** 展示用昵称：资料昵称或脱敏手机号 */
   const nickname = ref('未登录')
+  /** 资料里的昵称（可空），用于编辑表单 */
+  const profileNickname = ref('')
+  const phone = ref('')
   const avatarUrl = ref('')
   const loading = ref(false)
   const loginSheetVisible = ref(false)
@@ -51,9 +50,9 @@ export const useUserStore = defineStore('user', () => {
     return '未知错误'
   }
 
-  function showLoginErrorDetail(detail: string) {
+  function showErrorModal(title: string, detail: string) {
     uni.showModal({
-      title: '登录失败',
+      title,
       content: `原因：${detail}`,
       showCancel: false,
       confirmText: '知道了',
@@ -63,12 +62,10 @@ export const useUserStore = defineStore('user', () => {
   function clearSession() {
     userId.value = ''
     nickname.value = '未登录'
+    profileNickname.value = ''
+    phone.value = ''
     avatarUrl.value = ''
     setStoredToken('')
-  }
-
-  function normalizePhone(phoneRaw: string): string {
-    return phoneRaw.replace(/\D/g, '')
   }
 
   async function completeLogin(accessToken: string, userIdRaw: string) {
@@ -116,7 +113,7 @@ export const useUserStore = defineStore('user', () => {
   }
 
   /**
-   * 微信「手机号快捷登录」：getPhoneNumber 回调中的 detail。
+   * 微信「手机号」组件：getPhoneNumber 回调中的 detail，用于登录。
    */
   async function handlePhoneLoginDetail(detail: {
     errMsg?: string
@@ -145,7 +142,7 @@ export const useUserStore = defineStore('user', () => {
     catch (e) {
       console.error(e)
       clearSession()
-      showLoginErrorDetail(normalizeLoginError(e))
+      showErrorModal('登录失败', normalizeLoginError(e))
     }
     finally {
       loading.value = false
@@ -153,55 +150,38 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  async function sendOtherPhoneCode(phoneRaw: string) {
-    const phone = normalizePhone(phoneRaw)
-    if (!/^1\d{10}$/.test(phone)) {
-      uni.showToast({ title: '请输入11位手机号', icon: 'none' })
+  /**
+   * 已登录时：getPhoneNumber 换绑为微信当前授权手机号。
+   */
+  async function handleWechatBindPhoneDetail(detail: {
+    errMsg?: string
+    code?: string
+  }): Promise<boolean> {
+    const errMsg = detail.errMsg ?? ''
+    if (errMsg !== 'getPhoneNumber:ok') {
+      uni.showToast({
+        title: errMsg.includes('deny') ? '已取消授权' : '未授权手机号',
+        icon: 'none',
+      })
       return false
     }
-    try {
-      const res = await sendPhoneLoginCode(phone)
-      if (res.testCode) {
-        uni.showModal({
-          title: '开发测试验证码',
-          content: `验证码：${res.testCode}`,
-          showCancel: false,
-          confirmText: '知道了',
-        })
-      }
-      else {
-        uni.showToast({ title: '验证码已发送', icon: 'none' })
-      }
-      return true
-    }
-    catch (e) {
-      showLoginErrorDetail(normalizeLoginError(e))
+    const code = detail.code
+    if (!code) {
+      uni.showToast({ title: '请升级微信版本后重试', icon: 'none' })
       return false
     }
-  }
-
-  async function loginWithOtherPhone(phoneRaw: string, codeRaw: string) {
-    const phone = normalizePhone(phoneRaw)
-    const code = codeRaw.trim()
-    if (!/^1\d{10}$/.test(phone)) {
-      uni.showToast({ title: '请输入11位手机号', icon: 'none' })
-      return false
-    }
-    if (code.length < 4) {
-      uni.showToast({ title: '请输入验证码', icon: 'none' })
-      return false
-    }
-
     loading.value = true
     try {
-      const data = await loginWithPhoneCode(phone, code)
-      await completeLogin(data.accessToken, data.user.id)
-      endLoginFlow()
+      const me = await bindPhoneWithWechatCode(code)
+      phone.value = me.phone?.replace(/\s/g, '') ?? ''
+      profileNickname.value = me.nickname?.trim() ?? ''
+      nickname.value = profileNickname.value || maskPhone(phone.value) || '手机用户'
+      avatarUrl.value = me.avatarUrl?.trim() || ''
+      uni.showToast({ title: '手机号已更新', icon: 'success' })
       return true
     }
     catch (e) {
-      clearSession()
-      showLoginErrorDetail(normalizeLoginError(e))
+      showErrorModal('无法更换手机号', normalizeLoginError(e))
       return false
     }
     finally {
@@ -217,7 +197,9 @@ export const useUserStore = defineStore('user', () => {
     try {
       const me = await fetchMe()
       userId.value = me.id
-      nickname.value = me.nickname?.trim() || maskPhone(me.phone ?? '') || '手机用户'
+      phone.value = me.phone?.replace(/\s/g, '') ?? ''
+      profileNickname.value = me.nickname?.trim() ?? ''
+      nickname.value = profileNickname.value || maskPhone(phone.value) || '手机用户'
       avatarUrl.value = me.avatarUrl?.trim() || ''
     }
     catch (e) {
@@ -229,6 +211,8 @@ export const useUserStore = defineStore('user', () => {
   return {
     userId,
     nickname,
+    profileNickname,
+    phone,
     avatarUrl,
     loading,
     isLoggedIn,
@@ -236,8 +220,7 @@ export const useUserStore = defineStore('user', () => {
     tryRestoreSession,
     ensureLogin,
     handlePhoneLoginDetail,
-    sendOtherPhoneCode,
-    loginWithOtherPhone,
+    handleWechatBindPhoneDetail,
     endLoginFlow,
     loadProfile,
     clearSession,

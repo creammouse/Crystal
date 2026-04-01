@@ -79,10 +79,8 @@ export class AuthService {
     return data.access_token;
   }
 
-  /**
-   * 小程序「手机号快捷登录」：getPhoneNumber 返回的 code 换手机号，再签发 JWT。
-   */
-  async loginWithPhoneWechatCode(phoneCode: string) {
+  /** 小程序 getPhoneNumber 的 code → 微信接口换手机号（纯数字） */
+  private async fetchPhoneFromWechatCode(phoneCode: string): Promise<string> {
     const accessToken = await this.getMiniProgramAccessToken();
     const url = new URL(
       'https://api.weixin.qq.com/wxa/business/getuserphonenumber',
@@ -103,7 +101,14 @@ export class AuthService {
     if (!rawPhone) {
       throw new BadRequestException('微信未返回手机号');
     }
-    const phone = rawPhone.replace(/\s/g, '');
+    return rawPhone.replace(/\s/g, '');
+  }
+
+  /**
+   * 小程序「手机号快捷登录」：getPhoneNumber 返回的 code 换手机号，再签发 JWT。
+   */
+  async loginWithPhoneWechatCode(phoneCode: string) {
+    const phone = await this.fetchPhoneFromWechatCode(phoneCode);
 
     const user = await this.prisma.user.upsert({
       where: { phone },
@@ -121,7 +126,31 @@ export class AuthService {
     };
   }
 
-  /** 其他手机号登录：发送验证码（当前提供开发可用版本，生产环境应接入短信服务商） */
+  /** 已登录：通过微信组件换绑手机号（与 getPhoneNumber 相同能力） */
+  async updatePhoneWithWechatCode(userId: string, phoneCode: string) {
+    const phone = await this.fetchPhoneFromWechatCode(phoneCode);
+
+    const taken = await this.prisma.user.findUnique({ where: { phone } });
+    if (taken && taken.id !== userId) {
+      throw new BadRequestException('该手机号已被其他账号绑定');
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { phone },
+    });
+    return {
+      id: user.id,
+      phone: user.phone,
+      nickname: user.nickname,
+      avatarUrl: user.avatarUrl,
+    };
+  }
+
+  /**
+   * 短信验证码发送（需自行接入短信服务商后才会真正送达用户）。
+   * 小程序端已改为仅使用微信 getPhoneNumber，本接口保留供其他客户端或后续扩展。
+   */
   sendPhoneLoginCode(phoneRaw: string) {
     const phone = phoneRaw.trim();
     if (!/^1\d{10}$/.test(phone)) {
@@ -134,20 +163,16 @@ export class AuthService {
       throw new BadRequestException(`发送过于频繁，请 ${waitSec}s 后重试`);
     }
 
-    const isProd = (this.config.get<string>('NODE_ENV') || '').toLowerCase() === 'production';
-    const configured = this.config.get<string>('SMS_LOGIN_TEST_CODE')?.trim();
-    const code = configured || `${Math.floor(100000 + Math.random() * 900000)}`;
+    const code = `${Math.floor(100000 + Math.random() * 900000)}`;
     this.phoneCodeStore.set(phone, {
       code,
       expiresAtMs: now + PHONE_CODE_EXPIRES_MS,
       lastSentAtMs: now,
     });
 
-    // TODO(production): 接入真实短信服务商发送 code。当前生产仅返回已发送，不回传验证码。
     return {
       sent: true,
       expiresInSec: Math.floor(PHONE_CODE_EXPIRES_MS / 1000),
-      ...(isProd ? {} : { testCode: code }),
     };
   }
 
@@ -183,6 +208,44 @@ export class AuthService {
       tokenType: 'Bearer' as const,
       expiresIn: ACCESS_EXPIRES_SEC,
       user: { id: user.id },
+    };
+  }
+
+  /** 已登录用户：验证码校验通过后更换绑定手机号 */
+  async changePhoneForUser(userId: string, phoneRaw: string, codeRaw: string) {
+    const phone = phoneRaw.trim();
+    const code = codeRaw.trim();
+    if (!/^1\d{10}$/.test(phone)) {
+      throw new BadRequestException('手机号格式不正确');
+    }
+    const rec = this.phoneCodeStore.get(phone);
+    if (!rec) {
+      throw new BadRequestException('请先获取验证码');
+    }
+    const now = Date.now();
+    if (rec.expiresAtMs < now) {
+      this.phoneCodeStore.delete(phone);
+      throw new BadRequestException('验证码已过期，请重新获取');
+    }
+    if (rec.code !== code) {
+      throw new BadRequestException('验证码错误');
+    }
+    this.phoneCodeStore.delete(phone);
+
+    const taken = await this.prisma.user.findUnique({ where: { phone } });
+    if (taken && taken.id !== userId) {
+      throw new BadRequestException('该手机号已被其他账号绑定');
+    }
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { phone },
+    });
+    return {
+      id: user.id,
+      phone: user.phone,
+      nickname: user.nickname,
+      avatarUrl: user.avatarUrl,
     };
   }
 

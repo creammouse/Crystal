@@ -16,7 +16,10 @@
             </view>
           </view>
           <view class="profile-info">
-            <text class="nickname">{{ loading ? '登录中…' : nickname }}</text>
+            <text
+              class="nickname"
+              :class="{ 'nickname--guest': !isLoggedIn && !loading }"
+            >{{ loading ? '登录中…' : nickname }}</text>
             <view
               v-if="isLoggedIn"
               class="edit-row"
@@ -63,21 +66,24 @@
   </scroll-view>
   <!-- 小程序端 App.vue 的 template 不参与渲染，登录弹层必须挂在页面内 -->
   <LoginSheet />
+  <ProfileEditSheet v-model:visible="profileSheetOpen" />
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { onShow } from '@dcloudio/uni-app'
 import { resolveMediaUrl } from '../../config'
 import LoginSheet from '../../components/LoginSheet.vue'
+import ProfileEditSheet from '../../components/ProfileEditSheet.vue'
 import { ensureLoggedInForFeature, menuNeedsAuth } from '../../utils/require-auth'
 import { useUserStore } from '../../stores/user'
 
 const userStore = useUserStore()
 const { nickname, loading, isLoggedIn, avatarUrl } = storeToRefs(userStore)
 const avatarDisplay = computed(() => resolveMediaUrl(avatarUrl.value))
+const profileSheetOpen = ref(false)
 
 
 const menuEntries = [
@@ -91,11 +97,16 @@ const menuEntries = [
 
 onShow(() => {
   void userStore.tryRestoreSession()
+  if (uni.getStorageSync('OPEN_PROFILE_EDIT')) {
+    uni.removeStorageSync('OPEN_PROFILE_EDIT')
+    if (userStore.isLoggedIn)
+      profileSheetOpen.value = true
+  }
 })
 
 function onTapAvatar() {
   if (isLoggedIn.value) {
-    uni.navigateTo({ url: '/pages/mine/profile/index' })
+    profileSheetOpen.value = true
     return
   }
   void userStore.ensureLogin()
@@ -106,7 +117,7 @@ function onTapLoginPrompt() {
 }
 
 function onEditProfile() {
-  uni.navigateTo({ url: '/pages/mine/profile/index' })
+  profileSheetOpen.value = true
 }
 
 const menuRoutes: Partial<Record<(typeof menuEntries)[number]['key'], string>> = {
@@ -224,6 +235,11 @@ function onLogout() {
   line-height: 1.3;
 }
 
+.nickname--guest {
+  color: #999999;
+  font-weight: 500;
+}
+
 .edit-row {
   display: flex;
   flex-direction: row;
@@ -234,13 +250,13 @@ function onLogout() {
 
 .edit-text {
   font-size: 26rpx;
-  color: #3c9cff;
+  color: #999999;
 }
 
 .edit-arrow {
   margin-left: 4rpx;
   font-size: 32rpx;
-  color: #3c9cff;
+  color: #999999;
   line-height: 1;
   transform: translateY(-2rpx);
 }

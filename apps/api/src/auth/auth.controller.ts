@@ -34,7 +34,14 @@ export class AuthController {
     return this.auth.loginWithPhoneWechatCode(dto.code);
   }
 
-  /** 非快捷登录：发送短信验证码（当前为开发可用实现） */
+  /** 已登录：getPhoneNumber 的 code 换绑当前账号手机号 */
+  @Post('phone/wechat-bind')
+  @UseGuards(AuthGuard('jwt'))
+  phoneWechatBind(@Req() req: AuthedRequest, @Body() dto: PhoneWechatDto) {
+    return this.auth.updatePhoneWithWechatCode(req.user.userId, dto.code);
+  }
+
+  /** 短信验证码发送（需接入短信服务商；小程序不使用） */
   @Post('phone/send-code')
   sendPhoneCode(@Body() dto: PhoneSendCodeDto) {
     return this.auth.sendPhoneLoginCode(dto.phone);
@@ -44,6 +51,13 @@ export class AuthController {
   @Post('phone/code-login')
   phoneCodeLogin(@Body() dto: PhoneCodeLoginDto) {
     return this.auth.loginWithPhoneCode(dto.phone, dto.code);
+  }
+
+  /** 已登录：验证码校验通过后更换绑定手机号 */
+  @Post('phone/change')
+  @UseGuards(AuthGuard('jwt'))
+  phoneChange(@Req() req: AuthedRequest, @Body() dto: PhoneCodeLoginDto) {
+    return this.auth.changePhoneForUser(req.user.userId, dto.phone, dto.code);
   }
 
   @Get('me')

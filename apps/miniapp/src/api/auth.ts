@@ -24,21 +24,12 @@ export async function loginWithPhoneWechatCode(code: string) {
   })
 }
 
-export async function sendPhoneLoginCode(phone: string) {
-  return request<{ sent: boolean, expiresInSec: number, testCode?: string }>({
-    path: '/auth/phone/send-code',
+/** 已登录：getPhoneNumber 的 code 换绑手机号 */
+export async function bindPhoneWithWechatCode(code: string) {
+  return request<MeResponse>({
+    path: '/auth/phone/wechat-bind',
     method: 'POST',
-    data: { phone },
-    auth: false,
-  })
-}
-
-export async function loginWithPhoneCode(phone: string, code: string) {
-  return request<LoginResponse>({
-    path: '/auth/phone/code-login',
-    method: 'POST',
-    data: { phone, code },
-    auth: false,
+    data: { code },
   })
 }
 
