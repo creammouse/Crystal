@@ -13,7 +13,7 @@ export function menuNeedsAuth(key: string): boolean {
 }
 
 /**
- * 未登录时弹窗询问；用户确认后走完整登录（含 getUserProfile + code）。
+ * 未登录时弹窗询问；用户确认后打开登录弹层并完成手机号快捷登录（见 `stores/user.ensureLogin`）。
  */
 export async function ensureLoggedInForFeature(): Promise<boolean> {
   const store = useUserStore()

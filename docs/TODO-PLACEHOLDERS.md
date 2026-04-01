@@ -12,12 +12,16 @@
 
 ## 后端（Crystal API）
 
-> 技术栈：**Node.js + TypeScript + NestJS**，**PostgreSQL + Prisma 5.x**。本地数据库见 `apps/api/docker-compose.yml` 与 `apps/api/README.md`。
+> 技术栈：**Node.js + TypeScript + NestJS**，**PostgreSQL + Prisma 5.x**。本地数据库见 `apps/api/docker-compose.yml` 与 **`apps/api/README.md`**（鉴权与接口表以该文件为准）。
 
 - [x] 工程骨架：`apps/api`（Nest 默认结构 + `PrismaModule` / `PrismaService` + `GET /health`、`GET /health/db`）
-- [x] 初始模型：`User`（`openid` 唯一，供微信登录后续扩展）
-- [x] **微信登录（基线）**：`POST /auth/wechat`（body: `{ code }`）→ `jscode2session` → upsert `User` → JWT；`GET /auth/me`（`Authorization: Bearer`）；小程序 `src/utils/request.ts`、`src/api/auth.ts`、Pinia `stores/user.ts`、`App.vue` 启动静默登录、「我的」页展示登录态 / 点头像重登
-- [ ] **登录后续**：昵称头像（`getUserProfile` / 头像 URL 上传）、刷新 token、登出清理
+- [x] **用户模型**：`User` 以 **`phone` 唯一**（来自微信「手机号快捷登录」）；`nickname`、`avatarUrl` 可选，供后续资料编辑
+- [x] **登录（手机号快捷）**：`POST /auth/phone/wechat`，body `{ code }`，`code` 为小程序 **`getPhoneNumber`** 返回；服务端用微信 **`getuserphonenumber`** 换手机号 → upsert `User` → JWT（**非**已废弃的 `jscode2session` / openid 登录）
+- [x] **会话**：`GET /auth/me`（Bearer）；`App.vue` `onLaunch` 仅 **有 token 时** 静默 `tryRestoreSession`；小程序端 **`LoginSheet` 挂在 `pages/mine/index.vue`**（微信端 `App.vue` 的 template 不参与页面渲染，勿把弹层只写在 `App.vue`）
+- [x] **退出登录**：前端清本地 token / 状态（无服务端 revoke）；「我的」页菜单
+- [ ] **其他手机号登录**：短信验证码流程（产品占位，未实现）
+- [ ] **可选**：刷新 token、服务端 token 黑名单 / 登出接口
+- [ ] **资料**：`PATCH /auth/profile`、`POST /auth/upload-avatar` 已具备；小程序 `pages/mine/profile` 当前为「暂未开放」，与接口并存属预留
 - [ ] **商品 / DIY 目录**：与 `TODO-PLACEHOLDERS` 中小程序 DIY、商城条目对齐的 REST 接口
 - [ ] **订单 / 支付 / 地址**：与 `pages/mine`、确认订单页规划对齐
 
@@ -35,7 +39,7 @@
 > 下列页面在源码中均已标注 `TODO`（或等价说明）；此处为清单式汇总，便于排期与联调。
 
 - [ ] **商城** `pages/mall/index.vue`：商城分类、按分类商品列表 → 后端接口（文件内 TODO）
-- [ ] **我的** `pages/mine/index.vue`：已接静默登录与 `/auth/me`；头像昵称、编辑资料仍为占位 → 扩展用户字段与资料页
+- [ ] **我的** `pages/mine/index.vue`：已接静默恢复、`/auth/me`、手机号快捷登录弹层、退出登录；`profile` 页占位 → 资料编辑与后端 PATCH/上传对齐
 - [ ] **我的设计** `pages/mine/designs/index.vue`：设计列表 GET；删除 / 分享 / 加购 / 跳转 DIY 与结算（各 handler TODO）
 - [ ] **购物车** `pages/mine/cart/index.vue`：与后端或统一购物车存储同步；结算 → 确认订单页（待建路由，见下）
 - [ ] **我的订单** `pages/mine/orders/index.vue`：订单列表与状态筛选；**订单详情页**（路由待建，`onCardTap` TODO）
@@ -73,6 +77,8 @@
 > 以下均在 [微信公众平台](https://mp.weixin.qq.com/) 操作，**无法通过仓库代码提交完成**。与地图选点、定位等能力相关时，请逐项核对。
 
 - [ ] **小程序 AppID**：在 `apps/miniapp/src/manifest.json`（及必要时 `project.config.json`）中填写与后台一致的 AppID，本地用该账号在开发者工具里打开项目
+- [ ] **request / uploadFile 合法域名**：将线上 API 根域名（如 `https://api.example.com`，**不含路径**）配置到 **开发** → **开发管理** → **开发设置** → **服务器域名**；小程序请求、上传头像等需 HTTPS 且备案域名
+- [ ] **手机号能力**：使用 **手机号快捷登录** 需小程序类目/资质符合平台要求；以当前后台说明为准
 - [ ] **接口设置 → 位置相关能力**：**开发** → **开发管理** → **接口设置**，按页面说明开通 **`chooseLocation`（打开地图选择位置）** 等所需项；未开通时真机/提审可能直接失败
 - [ ] **用户隐私保护指引**：在后台完善「用户隐私保护指引」，声明**收集位置信息**及用途（例如：用于在地图上选择收货地址）；须与小程序实际调用的隐私接口一致，否则影响审核与用户授权流程
 - [ ] **服务类目**：确保所选类目与「电商 / 收货地址 / 位置」等使用场景相符，避免类目与能力不匹配导致审核驳回
@@ -92,7 +98,10 @@
 
 | 模块 | 路径 |
 |------|------|
-| 后端 API | `apps/api`（`prisma/schema.prisma`、`src/prisma/`、`src/main.ts`） |
+| 后端 API | `apps/api`（`prisma/schema.prisma`、`src/auth/`、`src/main.ts`） |
+| 登录弹层（小程序） | `apps/miniapp/src/components/LoginSheet.vue`（由「我的」页挂载） |
+| 登录态 / Pinia | `apps/miniapp/src/stores/user.ts` |
+| 需登录菜单拦截 | `apps/miniapp/src/utils/require-auth.ts` |
 | DIY 主逻辑 | `apps/miniapp/src/pages/diy/index.vue` |
 | 商城 | `apps/miniapp/src/pages/mall/index.vue` |
 | 我的入口 | `apps/miniapp/src/pages/mine/index.vue` |
@@ -108,8 +117,9 @@
 
 ## 建议优先级（可选）
 
-1. 后端：商品 / DIY 目录等接口；`User` 表扩展字段（昵称头像）  
-2. 商品与尺寸走后端 + 长按详情绑定具体 `item` 与真实字段  
-3. 手围/单双圈参与建议颗数与满串判断  
-4. 落位预览与拖拽插入规则按产品定稿优化  
-5. 商品详情页 + 购物车/订单/地址联调闭环  
+1. 业务后端：商品 / DIY 目录等接口；与商城、订单闭环  
+2. 资料页：与已有 `PATCH /auth/profile`、上传头像对齐（若产品需要）  
+3. 商品与尺寸走后端 + 长按详情绑定具体 `item` 与真实字段  
+4. 手围/单双圈参与建议颗数与满串判断  
+5. 落位预览与拖拽插入规则按产品定稿优化  
+6. 商品详情页 + 购物车/订单/地址联调闭环  

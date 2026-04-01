@@ -1,4 +1,5 @@
 <template>
+  <view class="page-root">
   <scroll-view class="page" scroll-y :show-scrollbar="false" :enhanced="true">
     <view class="page-inner">
       <view class="card card-profile">
@@ -60,6 +61,9 @@
       </view>
     </view>
   </scroll-view>
+  <!-- 小程序端 App.vue 的 template 不参与渲染，登录弹层必须挂在页面内 -->
+  <LoginSheet />
+  </view>
 </template>
 
 <script setup lang="ts">
@@ -67,6 +71,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { onShow } from '@dcloudio/uni-app'
 import { resolveMediaUrl } from '../../config'
+import LoginSheet from '../../components/LoginSheet.vue'
 import { ensureLoggedInForFeature, menuNeedsAuth } from '../../utils/require-auth'
 import { useUserStore } from '../../stores/user'
 
@@ -139,6 +144,11 @@ function onLogout() {
 </script>
 
 <style scoped lang="scss">
+.page-root {
+  position: relative;
+  min-height: 100vh;
+}
+
 .page {
   height: 100vh;
   background-color: #f7f7f7;

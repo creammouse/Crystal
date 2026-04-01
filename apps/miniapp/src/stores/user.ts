@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { fetchMe, loginWithPhoneWechatCode } from '../api/auth'
+import { fetchMe, loginWithPhoneCode, loginWithPhoneWechatCode, sendPhoneLoginCode } from '../api/auth'
 import { getStoredToken, setStoredToken } from '../utils/request'
 
 function maskPhone(phone: string): string {
@@ -67,6 +67,17 @@ export const useUserStore = defineStore('user', () => {
     setStoredToken('')
   }
 
+  function normalizePhone(phoneRaw: string): string {
+    return phoneRaw.replace(/\D/g, '')
+  }
+
+  async function completeLogin(accessToken: string, userIdRaw: string) {
+    setStoredToken(accessToken)
+    userId.value = userIdRaw
+    await loadProfile()
+    uni.showToast({ title: '登录成功', icon: 'success' })
+  }
+
   function logout() {
     clearSession()
     uni.showToast({ title: '已退出登录', icon: 'none' })
@@ -129,10 +140,7 @@ export const useUserStore = defineStore('user', () => {
     loading.value = true
     try {
       const data = await loginWithPhoneWechatCode(code)
-      setStoredToken(data.accessToken)
-      userId.value = data.user.id
-      await loadProfile()
-      uni.showToast({ title: '登录成功', icon: 'success' })
+      await completeLogin(data.accessToken, data.user.id)
     }
     catch (e) {
       console.error(e)
@@ -142,6 +150,62 @@ export const useUserStore = defineStore('user', () => {
     finally {
       loading.value = false
       endLoginFlow()
+    }
+  }
+
+  async function sendOtherPhoneCode(phoneRaw: string) {
+    const phone = normalizePhone(phoneRaw)
+    if (!/^1\d{10}$/.test(phone)) {
+      uni.showToast({ title: '请输入11位手机号', icon: 'none' })
+      return false
+    }
+    try {
+      const res = await sendPhoneLoginCode(phone)
+      if (res.testCode) {
+        uni.showModal({
+          title: '开发测试验证码',
+          content: `验证码：${res.testCode}`,
+          showCancel: false,
+          confirmText: '知道了',
+        })
+      }
+      else {
+        uni.showToast({ title: '验证码已发送', icon: 'none' })
+      }
+      return true
+    }
+    catch (e) {
+      showLoginErrorDetail(normalizeLoginError(e))
+      return false
+    }
+  }
+
+  async function loginWithOtherPhone(phoneRaw: string, codeRaw: string) {
+    const phone = normalizePhone(phoneRaw)
+    const code = codeRaw.trim()
+    if (!/^1\d{10}$/.test(phone)) {
+      uni.showToast({ title: '请输入11位手机号', icon: 'none' })
+      return false
+    }
+    if (code.length < 4) {
+      uni.showToast({ title: '请输入验证码', icon: 'none' })
+      return false
+    }
+
+    loading.value = true
+    try {
+      const data = await loginWithPhoneCode(phone, code)
+      await completeLogin(data.accessToken, data.user.id)
+      endLoginFlow()
+      return true
+    }
+    catch (e) {
+      clearSession()
+      showLoginErrorDetail(normalizeLoginError(e))
+      return false
+    }
+    finally {
+      loading.value = false
     }
   }
 
@@ -172,6 +236,8 @@ export const useUserStore = defineStore('user', () => {
     tryRestoreSession,
     ensureLogin,
     handlePhoneLoginDetail,
+    sendOtherPhoneCode,
+    loginWithOtherPhone,
     endLoginFlow,
     loadProfile,
     clearSession,

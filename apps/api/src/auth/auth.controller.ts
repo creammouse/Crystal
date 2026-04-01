@@ -17,6 +17,8 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { randomBytes } from 'crypto';
 import { AuthService } from './auth.service';
+import { PhoneCodeLoginDto } from './dto/phone-code-login.dto';
+import { PhoneSendCodeDto } from './dto/phone-send-code.dto';
 import { PhoneWechatDto } from './dto/phone-wechat.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -30,6 +32,18 @@ export class AuthController {
   @Post('phone/wechat')
   phoneWechat(@Body() dto: PhoneWechatDto) {
     return this.auth.loginWithPhoneWechatCode(dto.code);
+  }
+
+  /** 非快捷登录：发送短信验证码（当前为开发可用实现） */
+  @Post('phone/send-code')
+  sendPhoneCode(@Body() dto: PhoneSendCodeDto) {
+    return this.auth.sendPhoneLoginCode(dto.phone);
+  }
+
+  /** 非快捷登录：手机号 + 验证码登录 */
+  @Post('phone/code-login')
+  phoneCodeLogin(@Body() dto: PhoneCodeLoginDto) {
+    return this.auth.loginWithPhoneCode(dto.phone, dto.code);
   }
 
   @Get('me')

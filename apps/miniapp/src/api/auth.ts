@@ -24,6 +24,24 @@ export async function loginWithPhoneWechatCode(code: string) {
   })
 }
 
+export async function sendPhoneLoginCode(phone: string) {
+  return request<{ sent: boolean, expiresInSec: number, testCode?: string }>({
+    path: '/auth/phone/send-code',
+    method: 'POST',
+    data: { phone },
+    auth: false,
+  })
+}
+
+export async function loginWithPhoneCode(phone: string, code: string) {
+  return request<LoginResponse>({
+    path: '/auth/phone/code-login',
+    method: 'POST',
+    data: { phone, code },
+    auth: false,
+  })
+}
+
 export async function fetchMe() {
   return request<MeResponse>({
     path: '/auth/me',

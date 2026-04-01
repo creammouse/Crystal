@@ -22,10 +22,19 @@ type WxPhoneNumberRes = {
 };
 
 const ACCESS_EXPIRES_SEC = 7 * 24 * 60 * 60;
+const PHONE_CODE_EXPIRES_MS = 5 * 60 * 1000;
+const PHONE_CODE_RESEND_MS = 60 * 1000;
+
+type PhoneCodeRecord = {
+  code: string;
+  expiresAtMs: number;
+  lastSentAtMs: number;
+};
 
 @Injectable()
 export class AuthService {
   private accessTokenCache: { token: string; expiresAtMs: number } | null = null;
+  private phoneCodeStore = new Map<string, PhoneCodeRecord>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -104,6 +113,71 @@ export class AuthService {
 
     const accessTokenJwt = await this.jwt.signAsync({ sub: user.id });
 
+    return {
+      accessToken: accessTokenJwt,
+      tokenType: 'Bearer' as const,
+      expiresIn: ACCESS_EXPIRES_SEC,
+      user: { id: user.id },
+    };
+  }
+
+  /** 其他手机号登录：发送验证码（当前提供开发可用版本，生产环境应接入短信服务商） */
+  sendPhoneLoginCode(phoneRaw: string) {
+    const phone = phoneRaw.trim();
+    if (!/^1\d{10}$/.test(phone)) {
+      throw new BadRequestException('手机号格式不正确');
+    }
+    const now = Date.now();
+    const prev = this.phoneCodeStore.get(phone);
+    if (prev && now - prev.lastSentAtMs < PHONE_CODE_RESEND_MS) {
+      const waitSec = Math.ceil((PHONE_CODE_RESEND_MS - (now - prev.lastSentAtMs)) / 1000);
+      throw new BadRequestException(`发送过于频繁，请 ${waitSec}s 后重试`);
+    }
+
+    const isProd = (this.config.get<string>('NODE_ENV') || '').toLowerCase() === 'production';
+    const configured = this.config.get<string>('SMS_LOGIN_TEST_CODE')?.trim();
+    const code = configured || `${Math.floor(100000 + Math.random() * 900000)}`;
+    this.phoneCodeStore.set(phone, {
+      code,
+      expiresAtMs: now + PHONE_CODE_EXPIRES_MS,
+      lastSentAtMs: now,
+    });
+
+    // TODO(production): 接入真实短信服务商发送 code。当前生产仅返回已发送，不回传验证码。
+    return {
+      sent: true,
+      expiresInSec: Math.floor(PHONE_CODE_EXPIRES_MS / 1000),
+      ...(isProd ? {} : { testCode: code }),
+    };
+  }
+
+  /** 其他手机号登录：校验验证码并签发 JWT */
+  async loginWithPhoneCode(phoneRaw: string, codeRaw: string) {
+    const phone = phoneRaw.trim();
+    const code = codeRaw.trim();
+    if (!/^1\d{10}$/.test(phone)) {
+      throw new BadRequestException('手机号格式不正确');
+    }
+    const rec = this.phoneCodeStore.get(phone);
+    if (!rec) {
+      throw new BadRequestException('请先获取验证码');
+    }
+    const now = Date.now();
+    if (rec.expiresAtMs < now) {
+      this.phoneCodeStore.delete(phone);
+      throw new BadRequestException('验证码已过期，请重新获取');
+    }
+    if (rec.code !== code) {
+      throw new BadRequestException('验证码错误');
+    }
+    this.phoneCodeStore.delete(phone);
+
+    const user = await this.prisma.user.upsert({
+      where: { phone },
+      create: { phone },
+      update: {},
+    });
+    const accessTokenJwt = await this.jwt.signAsync({ sub: user.id });
     return {
       accessToken: accessTokenJwt,
       tokenType: 'Bearer' as const,
