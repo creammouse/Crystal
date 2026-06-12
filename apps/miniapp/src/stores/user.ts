@@ -1,12 +1,50 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
-  bindPhoneWithWechatCode,
+  changeBoundPhoneWithWechat as changeBoundPhoneWithWechatApi,
   fetchMe,
   loginWithPhoneWechatCode,
 } from '../api/auth'
 import { maskPhone } from '../utils/mask-phone'
 import { getStoredToken, setStoredToken } from '../utils/request'
+
+export type RealtimePhoneDetail = {
+  errMsg?: string
+  code?: string
+  errno?: number
+}
+
+function consumeRealtimePhoneCode(detail?: RealtimePhoneDetail): string | null {
+  if (!detail) {
+    uni.showToast({ title: '验证失败', icon: 'none' })
+    return null
+  }
+  const errMsg = detail.errMsg ?? ''
+  if (errMsg !== 'getRealtimePhoneNumber:ok') {
+    if (detail.errno === 1400001) {
+      uni.showToast({
+        title: '验证次数已达上限，请稍后再试',
+        icon: 'none',
+      })
+    }
+    else {
+      uni.showToast({
+        title:
+          errMsg.includes('deny') || errMsg.includes('cancel')
+            ? '已取消'
+            : '手机号验证失败',
+        icon: 'none',
+      })
+    }
+    return null
+  }
+  const code = detail.code?.trim()
+  if (!code) {
+    uni.showToast({ title: '请升级微信版本后重试', icon: 'none' })
+    return null
+  }
+  return code
+}
 
 export const useUserStore = defineStore('user', () => {
   const userId = ref('')
@@ -50,9 +88,9 @@ export const useUserStore = defineStore('user', () => {
     return '未知错误'
   }
 
-  function showErrorModal(title: string, detail: string) {
+  function showLoginErrorDetail(detail: string) {
     uni.showModal({
-      title,
+      title: '登录失败',
       content: `原因：${detail}`,
       showCancel: false,
       confirmText: '知道了',
@@ -113,7 +151,7 @@ export const useUserStore = defineStore('user', () => {
   }
 
   /**
-   * 微信「手机号」组件：getPhoneNumber 回调中的 detail，用于登录。
+   * 微信「手机号快捷登录」：getPhoneNumber 回调中的 detail。
    */
   async function handlePhoneLoginDetail(detail: {
     errMsg?: string
@@ -142,7 +180,7 @@ export const useUserStore = defineStore('user', () => {
     catch (e) {
       console.error(e)
       clearSession()
-      showErrorModal('登录失败', normalizeLoginError(e))
+      showLoginErrorDetail(normalizeLoginError(e))
     }
     finally {
       loading.value = false
@@ -151,28 +189,43 @@ export const useUserStore = defineStore('user', () => {
   }
 
   /**
-   * 已登录时：getPhoneNumber 换绑为微信当前授权手机号。
+   * 微信「手机号实时验证」：getRealtimePhoneNumber → 其他手机号登录。
+   * @see https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/getRealtimePhoneNumber.html
    */
-  async function handleWechatBindPhoneDetail(detail: {
-    errMsg?: string
-    code?: string
-  }): Promise<boolean> {
-    const errMsg = detail.errMsg ?? ''
-    if (errMsg !== 'getPhoneNumber:ok') {
-      uni.showToast({
-        title: errMsg.includes('deny') ? '已取消授权' : '未授权手机号',
-        icon: 'none',
-      })
-      return false
-    }
-    const code = detail.code
+  async function handleRealtimePhoneLoginDetail(detail?: RealtimePhoneDetail) {
+    const code = consumeRealtimePhoneCode(detail)
     if (!code) {
-      uni.showToast({ title: '请升级微信版本后重试', icon: 'none' })
+      endLoginFlow()
+      return
+    }
+    loading.value = true
+    try {
+      const data = await loginWithPhoneWechatCode(code)
+      await completeLogin(data.accessToken, data.user.id)
+    }
+    catch (e) {
+      console.error(e)
+      clearSession()
+      showLoginErrorDetail(normalizeLoginError(e))
+    }
+    finally {
+      loading.value = false
+      endLoginFlow()
+    }
+  }
+
+  /**
+   * 已登录：实时验证组件换绑手机号。
+   */
+  async function changeBoundPhoneWithWechat(codeRaw: string) {
+    const code = codeRaw.trim()
+    if (!code) {
+      uni.showToast({ title: '未获取到授权', icon: 'none' })
       return false
     }
     loading.value = true
     try {
-      const me = await bindPhoneWithWechatCode(code)
+      const me = await changeBoundPhoneWithWechatApi(code)
       phone.value = me.phone?.replace(/\s/g, '') ?? ''
       profileNickname.value = me.nickname?.trim() ?? ''
       nickname.value = profileNickname.value || maskPhone(phone.value) || '手机用户'
@@ -181,12 +234,24 @@ export const useUserStore = defineStore('user', () => {
       return true
     }
     catch (e) {
-      showErrorModal('无法更换手机号', normalizeLoginError(e))
+      uni.showModal({
+        title: '换绑失败',
+        content: `原因：${normalizeLoginError(e)}`,
+        showCancel: false,
+        confirmText: '知道了',
+      })
       return false
     }
     finally {
       loading.value = false
     }
+  }
+
+  async function handleRealtimePhoneBindDetail(detail?: RealtimePhoneDetail) {
+    const code = consumeRealtimePhoneCode(detail)
+    if (!code)
+      return false
+    return changeBoundPhoneWithWechat(code)
   }
 
   async function loadProfile() {
@@ -220,7 +285,9 @@ export const useUserStore = defineStore('user', () => {
     tryRestoreSession,
     ensureLogin,
     handlePhoneLoginDetail,
-    handleWechatBindPhoneDetail,
+    handleRealtimePhoneLoginDetail,
+    handleRealtimePhoneBindDetail,
+    changeBoundPhoneWithWechat,
     endLoginFlow,
     loadProfile,
     clearSession,

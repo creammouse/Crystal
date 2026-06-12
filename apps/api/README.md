@@ -34,7 +34,8 @@ pnpm run start:dev
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `POST` | `/auth/phone/wechat` | body: `{ "code": "<小程序 getPhoneNumber 返回的 code>" }`。服务端用微信接口换手机号并 upsert 用户，返回 JWT。**路径中 `wechat` 表示走微信服务端换手机号，不是已废弃的 `jscode2session` openid 登录。** |
+| `POST` | `/auth/phone/wechat` | body: `{ "code": "<...>" }`。`code` 来自小程序 **`getPhoneNumber`** 或 **`getRealtimePhoneNumber`**；服务端调用微信 `getuserphonenumber` 换手机号并 upsert 用户，返回 JWT。 |
+| `POST` | `/auth/phone/wechat-change` | 需登录；body 同上，`code` 来自 **`getRealtimePhoneNumber`**（或同接口换绑场景）；换绑当前用户 `phone`。 |
 | `GET` | `/auth/me` | 需 `Authorization: Bearer <token>`，返回用户资料（含 `phone`）。 |
 | `PATCH` | `/auth/profile` | 需登录；更新 `nickname` / `avatarUrl`（资料页开放后使用）。 |
 | `POST` | `/auth/upload-avatar` | 需登录；multipart 头像上传，返回站内相对路径。 |

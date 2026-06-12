@@ -14,7 +14,10 @@ export type MeResponse = {
   avatarUrl: string | null
 }
 
-/** 小程序 getPhoneNumber 返回的 code，用于服务端换取手机号并登录 */
+/**
+ * 小程序 getPhoneNumber / getRealtimePhoneNumber 返回的 code，
+ * 服务端调用微信 getuserphonenumber 换手机号并登录。
+ */
 export async function loginWithPhoneWechatCode(code: string) {
   return request<LoginResponse>({
     path: '/auth/phone/wechat',
@@ -24,10 +27,10 @@ export async function loginWithPhoneWechatCode(code: string) {
   })
 }
 
-/** 已登录：getPhoneNumber 的 code 换绑手机号 */
-export async function bindPhoneWithWechatCode(code: string) {
+/** 已登录：getRealtimePhoneNumber 的 code 换绑手机号 */
+export async function changeBoundPhoneWithWechat(code: string) {
   return request<MeResponse>({
-    path: '/auth/phone/wechat-bind',
+    path: '/auth/phone/wechat-change',
     method: 'POST',
     data: { code },
   })

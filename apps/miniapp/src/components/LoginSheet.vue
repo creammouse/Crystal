@@ -5,17 +5,23 @@
     @tap="onCancel"
   >
     <view class="panel" @tap.stop>
-      <text class="title">登录</text>
-      <text class="hint">使用微信授权手机号，完成验证后即可登录</text>
+      <text class="title">选择登录方式</text>
       <button
         class="btn btn-primary"
         open-type="getPhoneNumber"
-        :disabled="loading"
         @getphonenumber="onPhoneQuick"
       >
-        {{ loading ? '登录中…' : '微信授权手机号登录' }}
+        手机号快捷登录
       </button>
-      <button class="btn btn-ghost" :disabled="loading" @tap="onCancel">
+      <button
+        class="btn btn-secondary"
+        open-type="getRealtimePhoneNumber"
+        :disabled="loading"
+        @getrealtimephonenumber="onRealtimePhone"
+      >
+        微信验证登录
+      </button>
+      <button class="btn btn-ghost" @tap="onCancel">
         取消
       </button>
     </view>
@@ -31,6 +37,10 @@ const { loginSheetVisible, loading } = storeToRefs(userStore)
 
 function onPhoneQuick(e: { detail?: { errMsg?: string; code?: string } }) {
   void userStore.handlePhoneLoginDetail(e.detail ?? {})
+}
+
+function onRealtimePhone(e: { detail?: { errMsg?: string; code?: string; errno?: number } }) {
+  void userStore.handleRealtimePhoneLoginDetail(e.detail ?? {})
 }
 
 function onCancel() {
@@ -69,16 +79,7 @@ function onCancel() {
   font-size: 32rpx;
   font-weight: 600;
   color: #333333;
-  margin-bottom: 20rpx;
-}
-
-.hint {
-  display: block;
-  font-size: 26rpx;
-  color: #888888;
-  line-height: 1.5;
-  margin-bottom: 32rpx;
-  text-align: center;
+  margin-bottom: 36rpx;
 }
 
 .btn {
@@ -98,6 +99,13 @@ function onCancel() {
 
 .btn-primary {
   background-color: #3c9cff;
+}
+
+.btn-secondary {
+  background-color: #ffffff;
+  color: #3c9cff;
+  border: 2rpx solid #3c9cff;
+  line-height: 84rpx;
 }
 
 .btn-ghost {

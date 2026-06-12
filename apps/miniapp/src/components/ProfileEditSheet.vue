@@ -65,16 +65,17 @@
         </view>
 
         <view v-else class="body-inner body-inner--phone">
-          <text class="bind-hint">
-            使用与登录相同的微信手机号验证。授权后，将绑定为当前微信账号下的手机号；若该号已被其他账号使用则无法更换。
+          <text class="phone-hint">
+            使用微信「手机号实时验证」绑定新号码，服务端通过 code 换取手机号（与登录接口一致）。按微信规则计费；需非个人主体且已认证的小程序。
           </text>
           <button
-            class="btn btn-primary btn-bind"
-            open-type="getPhoneNumber"
+            class="btn btn-primary btn-realtime"
+            plain
+            open-type="getRealtimePhoneNumber"
             :disabled="loading"
-            @getphonenumber="onWechatBind"
+            @getrealtimephonenumber="onRealtimePhoneBind"
           >
-            {{ loading ? '处理中…' : '微信授权并更换' }}
+            {{ loading ? '处理中…' : '微信验证并更换' }}
           </button>
         </view>
       </view>
@@ -137,8 +138,8 @@ function onNicknameInput(e: { detail?: { value?: string } }) {
   nicknameDraft.value = (e.detail?.value ?? '').slice(0, 32)
 }
 
-async function onWechatBind(e: { detail?: { errMsg?: string; code?: string } }) {
-  const ok = await userStore.handleWechatBindPhoneDetail(e.detail ?? {})
+async function onRealtimePhoneBind(e: { detail?: { errMsg?: string; code?: string; errno?: number } }) {
+  const ok = await userStore.handleRealtimePhoneBindDetail(e.detail ?? {})
   if (ok)
     subView.value = 'profile'
 }
@@ -349,15 +350,16 @@ async function onSaveProfile() {
   line-height: 1;
 }
 
-.bind-hint {
+.phone-hint {
+  display: block;
   font-size: 26rpx;
   color: #888888;
   line-height: 1.55;
-  margin-bottom: 28rpx;
+  margin-bottom: 8rpx;
 }
 
-.btn-bind {
-  margin-top: 0;
+.body-inner--phone .btn-realtime {
+  margin-top: 24rpx;
 }
 
 .btn {

@@ -17,8 +17,6 @@ import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { randomBytes } from 'crypto';
 import { AuthService } from './auth.service';
-import { PhoneCodeLoginDto } from './dto/phone-code-login.dto';
-import { PhoneSendCodeDto } from './dto/phone-send-code.dto';
 import { PhoneWechatDto } from './dto/phone-wechat.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -28,36 +26,17 @@ type AuthedRequest = Request & { user: { userId: string } };
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  /** 小程序 getPhoneNumber 返回的 code */
+  /** 小程序 getPhoneNumber / getRealtimePhoneNumber 返回的 code → 换手机号并登录 */
   @Post('phone/wechat')
   phoneWechat(@Body() dto: PhoneWechatDto) {
     return this.auth.loginWithPhoneWechatCode(dto.code);
   }
 
-  /** 已登录：getPhoneNumber 的 code 换绑当前账号手机号 */
-  @Post('phone/wechat-bind')
+  /** 已登录：getRealtimePhoneNumber 的 code → 更换绑定手机号 */
+  @Post('phone/wechat-change')
   @UseGuards(AuthGuard('jwt'))
-  phoneWechatBind(@Req() req: AuthedRequest, @Body() dto: PhoneWechatDto) {
-    return this.auth.updatePhoneWithWechatCode(req.user.userId, dto.code);
-  }
-
-  /** 短信验证码发送（需接入短信服务商；小程序不使用） */
-  @Post('phone/send-code')
-  sendPhoneCode(@Body() dto: PhoneSendCodeDto) {
-    return this.auth.sendPhoneLoginCode(dto.phone);
-  }
-
-  /** 非快捷登录：手机号 + 验证码登录 */
-  @Post('phone/code-login')
-  phoneCodeLogin(@Body() dto: PhoneCodeLoginDto) {
-    return this.auth.loginWithPhoneCode(dto.phone, dto.code);
-  }
-
-  /** 已登录：验证码校验通过后更换绑定手机号 */
-  @Post('phone/change')
-  @UseGuards(AuthGuard('jwt'))
-  phoneChange(@Req() req: AuthedRequest, @Body() dto: PhoneCodeLoginDto) {
-    return this.auth.changePhoneForUser(req.user.userId, dto.phone, dto.code);
+  phoneWechatChange(@Req() req: AuthedRequest, @Body() dto: PhoneWechatDto) {
+    return this.auth.changePhoneWithWechatCode(req.user.userId, dto.code);
   }
 
   @Get('me')
