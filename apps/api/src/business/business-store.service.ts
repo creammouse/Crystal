@@ -79,7 +79,7 @@ export class BusinessStoreService {
       mkdirSync(this.dataDir, { recursive: true });
     }
     if (!existsSync(this.filePath)) {
-      this.writeState({ users: {} });
+      writeFileSync(this.filePath, JSON.stringify({ users: {} }, null, 2), 'utf8');
     }
   }
 }
