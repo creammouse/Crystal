@@ -29,6 +29,7 @@ export class DiyDesignService {
     if (!name || !Array.isArray(payload.beads) || payload.beads.length === 0) {
       throw new BadRequestException('设计信息不完整');
     }
+    const beads = clone(payload.beads);
     return this.store.updateUserState(userId, (userState) => {
       const now = Date.now();
       const existing = payload.id
@@ -41,7 +42,7 @@ export class DiyDesignService {
         name,
         wristSize: (payload.wristSize ?? '16').trim() || '16',
         wearMode: payload.wearMode === 'double' ? 'double' : 'single',
-        beads: clone(payload.beads),
+        beads,
         configSignature: (payload.configSignature ?? '').trim(),
         accessoriesText: (payload.accessoriesText ?? '').trim(),
         wearModeText: (payload.wearModeText ?? '').trim(),

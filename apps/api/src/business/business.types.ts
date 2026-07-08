@@ -89,7 +89,7 @@ export type CommerceFavoriteItem = {
   productId: string;
   title: string;
   coverImageUrl: string | null;
-  priceFen?: number;
+  priceFen: number;
   savedAtLabel: string;
 };
 
@@ -97,7 +97,7 @@ export type CommerceHistoryItem = {
   productId: string;
   title: string;
   coverImageUrl: string | null;
-  priceFen?: number;
+  priceFen: number;
   viewedAtLabel: string;
 };
 
