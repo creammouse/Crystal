@@ -9,10 +9,124 @@ datasource db {
 
 /// 用户（手机号唯一，来自微信手机号快捷登录）
 model User {
+  id         String         @id @default(cuid())
+  phone      String         @unique
+  nickname   String?
+  avatarUrl  String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  cartItems  UserCartItem[]
+  favorites  UserFavorite[]
+  histories  UserHistory[]
+  orders     UserOrder[]
+  addresses  UserAddress[]
+  diyDesigns UserDiyDesign[]
+}
+
+model UserCartItem {
+  id                    String   @id
+  userId                String
+  kind                  String
+  productId             String?
+  skuId                 String?
+  designId              String?
+  designConfigSignature String?
+  title                 String
+  coverImageUrl         String?
+  specLabel             String?
+  priceFen              Int
+  qty                   Int
+  selected              Boolean
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserFavorite {
   id        String   @id @default(cuid())
-  phone     String   @unique
-  nickname  String?
-  avatarUrl String?
+  userId    String
+  productId String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model UserHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  viewedAt  DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model UserOrder {
+  id             String   @id
+  userId         String
+  orderNo        String   @unique
+  status         String
+  source         String
+  items          Json
+  goodsTotalFen  Int
+  deliveryFeeFen Int
+  payableTotalFen Int
+  itemCount      Int
+  address        Json
+  payMethod      String
+  shippingMethod String
+  timeline       Json
+  cancelRequest  Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserAddress {
+  id              String   @id
+  userId          String
+  name            String
+  dialCode        String
+  phone           String
+  isDefault       Boolean
+  tag             String
+  tagPreset       String
+  deliveryAddress String
+  buildingDetail  String
+  detail          String
+  pasteText       String
+  createdAt       DateTime
+  updatedAt       DateTime
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserDiyDesign {
+  id              String   @id
+  userId          String
+  name            String
+  wristSize       String
+  wearMode        String
+  beads           Json
+  configSignature String
+  accessoriesText String
+  wearModeText    String
+  specLabel       String
+  priceFen        Int
+  createdAt       DateTime
+  updatedAt       DateTime
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

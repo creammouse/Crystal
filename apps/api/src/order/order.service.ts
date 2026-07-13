@@ -34,8 +34,8 @@ function buildOrderNo(timestamp: number) {
 export class OrderService {
   constructor(private readonly store: BusinessStoreService) {}
 
-  listOrders(userId: string) {
-    const userState = this.store.getUserState(userId);
+  async listOrders(userId: string) {
+    const userState = await this.store.getUserState(userId);
     return {
       items: clone(
         [...userState.orders].sort((left, right) => right.updatedAt - left.updatedAt),
@@ -43,13 +43,13 @@ export class OrderService {
     };
   }
 
-  getOrderDetail(userId: string, orderId: string) {
-    const order = this.findOrder(userId, orderId);
+  async getOrderDetail(userId: string, orderId: string) {
+    const order = await this.findOrder(userId, orderId);
     if (!order) throw new NotFoundException('订单不存在');
     return clone(order);
   }
 
-  createOrder(
+  async createOrder(
     userId: string,
     payload: {
       source?: 'buy_now' | 'cart';
@@ -84,7 +84,7 @@ export class OrderService {
       updatedAt: now,
     };
 
-    this.store.updateUserState(userId, (userState) => {
+    await this.store.updateUserState(userId, (userState) => {
       userState.orders.unshift(order);
       if (order.source === 'cart') {
         const cartIds = new Set(items.map(item => item.id));
@@ -95,8 +95,8 @@ export class OrderService {
     return { order: clone(order) };
   }
 
-  payOrder(userId: string, orderId: string) {
-    return this.updateOrder(userId, orderId, (order) => {
+  async payOrder(userId: string, orderId: string) {
+    return await this.updateOrder(userId, orderId, (order) => {
       if (order.status !== 'pending_payment') {
         throw new BadRequestException('当前订单不可支付');
       }
@@ -109,8 +109,8 @@ export class OrderService {
     });
   }
 
-  cancelOrder(userId: string, orderId: string) {
-    return this.updateOrder(userId, orderId, (order) => {
+  async cancelOrder(userId: string, orderId: string) {
+    return await this.updateOrder(userId, orderId, (order) => {
       if (order.status !== 'pending_payment') {
         throw new BadRequestException('当前订单不可直接取消');
       }
@@ -122,12 +122,12 @@ export class OrderService {
     });
   }
 
-  requestCancel(
+  async requestCancel(
     userId: string,
     orderId: string,
     payload: { reasonCategory?: string; reason?: string },
   ) {
-    return this.updateOrder(userId, orderId, (order) => {
+    return await this.updateOrder(userId, orderId, (order) => {
       if (order.status !== 'pending_receipt') {
         throw new BadRequestException('当前订单不可申请取消');
       }
@@ -146,8 +146,8 @@ export class OrderService {
     });
   }
 
-  confirmReceipt(userId: string, orderId: string) {
-    return this.updateOrder(userId, orderId, (order) => {
+  async confirmReceipt(userId: string, orderId: string) {
+    return await this.updateOrder(userId, orderId, (order) => {
       if (order.status !== 'pending_receipt') {
         throw new BadRequestException('当前订单不可确认收货');
       }
@@ -161,12 +161,12 @@ export class OrderService {
     });
   }
 
-  updateAddress(
+  async updateAddress(
     userId: string,
     orderId: string,
     payload: { address?: CommerceOrderAddressSnapshot },
   ) {
-    return this.updateOrder(userId, orderId, (order) => {
+    return await this.updateOrder(userId, orderId, (order) => {
       if (order.status !== 'pending_payment') {
         throw new BadRequestException('当前订单不可修改收货地址');
       }
@@ -179,12 +179,12 @@ export class OrderService {
     });
   }
 
-  private updateOrder(
+  private async updateOrder(
     userId: string,
     orderId: string,
     updater: (order: CommerceOrderDetail) => void,
   ) {
-    return this.store.updateUserState(userId, (userState) => {
+    return await this.store.updateUserState(userId, (userState) => {
       const order = userState.orders.find(item => item.id === orderId);
       if (!order) throw new NotFoundException('订单不存在');
       updater(order);
@@ -192,8 +192,8 @@ export class OrderService {
     });
   }
 
-  private findOrder(userId: string, orderId: string) {
-    const userState = this.store.getUserState(userId);
+  private async findOrder(userId: string, orderId: string) {
+    const userState = await this.store.getUserState(userId);
     return userState.orders.find(item => item.id === orderId) ?? null;
   }
 }

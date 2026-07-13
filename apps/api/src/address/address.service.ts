@@ -25,25 +25,25 @@ function getTagLabel(tagPreset: AddressTagPreset, customTag?: string) {
 export class AddressService {
   constructor(private readonly store: BusinessStoreService) {}
 
-  listAddresses(userId: string) {
-    const userState = this.store.getUserState(userId);
+  async listAddresses(userId: string) {
+    const userState = await this.store.getUserState(userId);
     return { items: clone(this.sortAddresses(userState.addresses)) };
   }
 
-  getAddress(userId: string, id: string) {
-    const userState = this.store.getUserState(userId);
+  async getAddress(userId: string, id: string) {
+    const userState = await this.store.getUserState(userId);
     const item = userState.addresses.find(entry => entry.id === id);
     if (!item) throw new NotFoundException('地址不存在');
     return clone(item);
   }
 
-  getDefaultAddress(userId: string) {
-    const userState = this.store.getUserState(userId);
+  async getDefaultAddress(userId: string) {
+    const userState = await this.store.getUserState(userId);
     const item = this.sortAddresses(userState.addresses).find(entry => entry.isDefault) ?? null;
     return item ? clone(item) : null;
   }
 
-  saveAddress(
+  async saveAddress(
     userId: string,
     payload: {
       id?: string;
@@ -69,7 +69,7 @@ export class AddressService {
       throw new BadRequestException('地址信息不完整');
     }
 
-    return this.store.updateUserState(userId, (userState) => {
+    return await this.store.updateUserState(userId, (userState) => {
       const existing = payload.id
         ? userState.addresses.find(item => item.id === payload.id)
         : null;
@@ -108,8 +108,8 @@ export class AddressService {
     });
   }
 
-  deleteAddress(userId: string, id: string) {
-    return this.store.updateUserState(userId, (userState) => {
+  async deleteAddress(userId: string, id: string) {
+    return await this.store.updateUserState(userId, (userState) => {
       userState.addresses = this.ensureDefault(
         userState.addresses.filter(item => item.id !== id),
       );
@@ -117,8 +117,8 @@ export class AddressService {
     });
   }
 
-  setDefault(userId: string, id: string) {
-    return this.store.updateUserState(userId, (userState) => {
+  async setDefault(userId: string, id: string) {
+    return await this.store.updateUserState(userId, (userState) => {
       const exists = userState.addresses.some(item => item.id === id);
       if (!exists) throw new NotFoundException('地址不存在');
       userState.addresses = userState.addresses.map(item => ({

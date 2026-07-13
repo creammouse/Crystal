@@ -10,27 +10,27 @@ function clone<T>(value: T): T {
 export class DiyDesignService {
   constructor(private readonly store: BusinessStoreService) {}
 
-  list(userId: string) {
-    const userState = this.store.getUserState(userId);
+  async list(userId: string) {
+    const userState = await this.store.getUserState(userId);
     return {
       items: clone([...userState.designs].sort((left, right) => right.updatedAt - left.updatedAt)),
     };
   }
 
-  getOne(userId: string, id: string) {
-    const userState = this.store.getUserState(userId);
+  async getOne(userId: string, id: string) {
+    const userState = await this.store.getUserState(userId);
     const item = userState.designs.find(entry => entry.id === id);
     if (!item) throw new NotFoundException('设计不存在');
     return clone(item);
   }
 
-  save(userId: string, payload: Partial<SavedDiyDesign>) {
+  async save(userId: string, payload: Partial<SavedDiyDesign>) {
     const name = (payload.name ?? '').trim();
     if (!name || !Array.isArray(payload.beads) || payload.beads.length === 0) {
       throw new BadRequestException('设计信息不完整');
     }
     const beads = clone(payload.beads);
-    return this.store.updateUserState(userId, (userState) => {
+    return await this.store.updateUserState(userId, (userState) => {
       const now = Date.now();
       const existing = payload.id
         ? userState.designs.find(item => item.id === payload.id)
@@ -58,8 +58,8 @@ export class DiyDesignService {
     });
   }
 
-  delete(userId: string, id: string) {
-    return this.store.updateUserState(userId, (userState) => {
+  async delete(userId: string, id: string) {
+    return await this.store.updateUserState(userId, (userState) => {
       userState.designs = userState.designs.filter(item => item.id !== id);
       return { items: clone(userState.designs) };
     });

@@ -21,7 +21,7 @@ function formatRecentActionLabel(date: Date, suffix = ''): string {
   const mm = String(date.getMinutes()).padStart(2, '0');
   if (date >= todayStart) return `今天 ${hh}:${mm}${suffix}`;
   if (date >= yesterdayStart) return `昨天 ${hh}:${mm}${suffix}`;
-  return `${date.getMonth() + 1} 月${date.getDate()} 日 ${hh}:${mm}${suffix}`;
+  return `${date.getMonth() + 1} 月 ${date.getDate()} 日 ${hh}:${mm}${suffix}`;
 }
 
 @Injectable()
@@ -51,23 +51,23 @@ export class CommerceService {
     };
   }
 
-  getProductDetail(productId: string, userId?: string) {
+  async getProductDetail(productId: string, userId?: string) {
     const detail = this.findProductOrThrow(productId);
     const product = clone(detail);
     if (userId) {
-      const userState = this.store.getUserState(userId);
+      const userState = await this.store.getUserState(userId);
       product.isFavorited = userState.favoriteProductIds.includes(productId);
       product.favoriteCount = detail.favoriteCount + (product.isFavorited ? 1 : 0);
     }
     return product;
   }
 
-  listCart(userId: string) {
-    const userState = this.store.getUserState(userId);
+  async listCart(userId: string) {
+    const userState = await this.store.getUserState(userId);
     return { items: clone(userState.cartItems) };
   }
 
-  addProductCartItem(
+  async addProductCartItem(
     userId: string,
     payload: { productId?: string; skuId?: string; quantity?: number },
   ) {
@@ -76,7 +76,7 @@ export class CommerceService {
     if (!sku) throw new BadRequestException('规格不存在');
     const qty = Math.max(1, Math.floor(payload.quantity ?? 1));
 
-    return this.store.updateUserState(userId, (userState) => {
+    return await this.store.updateUserState(userId, (userState) => {
       const existing = userState.cartItems.find(
         item =>
           item.kind === 'product'
@@ -111,7 +111,7 @@ export class CommerceService {
     });
   }
 
-  addDesignCartItem(
+  async addDesignCartItem(
     userId: string,
     payload: {
       designId?: string;
@@ -130,7 +130,7 @@ export class CommerceService {
     const qty = Math.max(1, Math.floor(payload.quantity ?? 1));
     const priceFen = Number(payload.priceFen ?? 0);
 
-    return this.store.updateUserState(userId, (userState) => {
+    return await this.store.updateUserState(userId, (userState) => {
       const existing = userState.cartItems.find(
         item =>
           item.kind === 'design'
@@ -168,12 +168,12 @@ export class CommerceService {
     });
   }
 
-  updateCartItemQuantity(
+  async updateCartItemQuantity(
     userId: string,
     cartItemId: string,
     payload: { quantity?: number },
   ) {
-    return this.store.updateUserState(userId, (userState) => {
+    return await this.store.updateUserState(userId, (userState) => {
       const item = userState.cartItems.find(entry => entry.id === cartItemId);
       if (!item) throw new NotFoundException('购物车商品不存在');
       item.qty = Math.max(1, Math.min(99, Math.floor(payload.quantity ?? 1)));
@@ -184,8 +184,8 @@ export class CommerceService {
     });
   }
 
-  removeCartItems(userId: string, cartItemIds: string[]) {
-    return this.store.updateUserState(userId, (userState) => {
+  async removeCartItems(userId: string, cartItemIds: string[]) {
+    return await this.store.updateUserState(userId, (userState) => {
       if (!cartItemIds.length) {
         userState.cartItems = [];
         return { items: [] };
@@ -196,30 +196,17 @@ export class CommerceService {
     });
   }
 
-  listFavorites(userId: string) {
-    const userState = this.store.getUserState(userId);
-    const items: CommerceFavoriteItem[] = userState.favoriteProductIds
-      .map((productId) => {
-        const product = COMMERCE_PRODUCTS.find(item => item.id === productId);
-        if (!product) return null;
-        return {
-          productId: product.id,
-          title: product.title,
-          coverImageUrl: product.coverImageUrl,
-          priceFen: product.priceFen,
-          savedAtLabel: formatRecentActionLabel(new Date(), ' 收藏'),
-        };
-      })
-      .filter((item): item is CommerceFavoriteItem => item !== null);
-    return { items };
+  async listFavorites(userId: string) {
+    const userState = await this.store.getUserState(userId);
+    return { items: this.buildFavoriteItems(userState.favoriteProductIds) };
   }
 
-  toggleFavorite(
+  async toggleFavorite(
     userId: string,
     payload: { productId?: string; favorited?: boolean },
   ) {
     const product = this.findProductOrThrow(payload.productId ?? '');
-    return this.store.updateUserState(userId, (userState) => {
+    return await this.store.updateUserState(userId, (userState) => {
       const targets = new Set(userState.favoriteProductIds);
       if (payload.favorited) targets.add(product.id);
       else targets.delete(product.id);
@@ -234,9 +221,58 @@ export class CommerceService {
     });
   }
 
-  listHistory(userId: string) {
-    const userState = this.store.getUserState(userId);
-    const items: CommerceHistoryItem[] = userState.history
+  async listHistory(userId: string) {
+    const userState = await this.store.getUserState(userId);
+    return { items: this.buildHistoryItems(userState.history) };
+  }
+
+  async recordHistory(userId: string, payload: { productId?: string }) {
+    const product = this.findProductOrThrow(payload.productId ?? '');
+    return await this.store.updateUserState(userId, (userState) => {
+      userState.history = userState.history.filter(item => item.productId !== product.id);
+      userState.history.unshift({
+        productId: product.id,
+        viewedAt: Date.now(),
+      });
+      userState.history = userState.history.slice(0, 50);
+      return { items: this.buildHistoryItems(userState.history) };
+    });
+  }
+
+  async removeHistoryItem(userId: string, productId: string) {
+    return await this.store.updateUserState(userId, (userState) => {
+      userState.history = userState.history.filter(item => item.productId !== productId);
+      return { items: this.buildHistoryItems(userState.history) };
+    });
+  }
+
+  async clearHistory(userId: string) {
+    return await this.store.updateUserState(userId, (userState) => {
+      userState.history = [];
+      return { items: [] };
+    });
+  }
+
+  private buildFavoriteItems(productIds: string[]): CommerceFavoriteItem[] {
+    return productIds
+      .map((productId) => {
+        const product = COMMERCE_PRODUCTS.find(item => item.id === productId);
+        if (!product) return null;
+        return {
+          productId: product.id,
+          title: product.title,
+          coverImageUrl: product.coverImageUrl,
+          priceFen: product.priceFen,
+          savedAtLabel: formatRecentActionLabel(new Date(), ' 收藏'),
+        };
+      })
+      .filter((item): item is CommerceFavoriteItem => item !== null);
+  }
+
+  private buildHistoryItems(
+    history: Array<{ productId: string; viewedAt: number }>,
+  ): CommerceHistoryItem[] {
+    return history
       .map((entry) => {
         const product = COMMERCE_PRODUCTS.find(item => item.id === entry.productId);
         if (!product) return null;
@@ -249,34 +285,6 @@ export class CommerceService {
         };
       })
       .filter((item): item is CommerceHistoryItem => item !== null);
-    return { items };
-  }
-
-  recordHistory(userId: string, payload: { productId?: string }) {
-    const product = this.findProductOrThrow(payload.productId ?? '');
-    return this.store.updateUserState(userId, (userState) => {
-      userState.history = userState.history.filter(item => item.productId !== product.id);
-      userState.history.unshift({
-        productId: product.id,
-        viewedAt: Date.now(),
-      });
-      userState.history = userState.history.slice(0, 50);
-      return this.listHistory(userId);
-    });
-  }
-
-  removeHistoryItem(userId: string, productId: string) {
-    return this.store.updateUserState(userId, (userState) => {
-      userState.history = userState.history.filter(item => item.productId !== productId);
-      return this.listHistory(userId);
-    });
-  }
-
-  clearHistory(userId: string) {
-    return this.store.updateUserState(userId, (userState) => {
-      userState.history = [];
-      return { items: [] };
-    });
   }
 
   private findProductOrThrow(productId: string): CommerceProductDetail {
